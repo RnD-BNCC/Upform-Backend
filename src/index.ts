@@ -8,6 +8,7 @@ import { swaggerSpec } from './config/swagger.js'
 import eventRoutes from './routes/events.js'
 import sectionRoutes from './routes/sections.js'
 import responseRoutes from './routes/responses.js'
+import publicRoutes from './routes/public.js'
 
 const app = express()
 const PORT = process.env.PORT ?? 3001
@@ -23,6 +24,7 @@ app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec))
 app.use('/api/events', eventRoutes)
 app.use('/api/events/:eventId/sections', sectionRoutes)
 app.use('/api/events/:eventId/responses', responseRoutes)
+app.use('/api/public', publicRoutes)
 
 app.get('/health', (_req, res) => {
   res.json({
