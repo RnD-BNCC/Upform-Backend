@@ -1,0 +1,38 @@
+name: Branch Name Check
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+    branches:
+      - main
+      - uat
+
+jobs:
+  check-branch:
+    name: Validate Branch Name
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check branch name convention
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const branch = context.payload.pull_request.head.ref
+            const excluded = ['main', 'master', 'uat', 'develop']
+            const pattern = /^[a-z0-9]+\/(feature|fix|hotfix|chore|docs|refactor|perf|test|ci)\/[a-z0-9]+([a-z0-9-]*[a-z0-9])?$/
+
+            if (excluded.includes(branch)) {
+              console.log(`Branch "${branch}" is a protected branch, skipping check.`)
+              return
+            }
+
+            if (!pattern.test(branch)) {
+              core.setFailed(
+                `Branch name "${branch}" tidak sesuai konvensi.\n` +
+                `Format yang valid: <username>/<type>/<description>\n` +
+                `Type yang diizinkan: feature, fix, hotfix, chore, docs, refactor, perf, test, ci\n` +
+                `Contoh: sam/feature/login-page, andrian/fix/auth-bug`
+              )
+            } else {
+              console.log(`Branch name "${branch}" valid.`)
+            }
