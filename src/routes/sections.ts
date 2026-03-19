@@ -5,8 +5,8 @@ import { requireAuth } from '../middlewares/auth.js'
 const router = Router({ mergeParams: true })
 router.use(requireAuth)
 
-async function findOwnedEvent(userId: string, eventId: string) {
-  return prisma.event.findFirst({ where: { id: eventId, userId } })
+async function findEvent(eventId: string) {
+  return prisma.event.findUnique({ where: { id: eventId } })
 }
 
 /**
@@ -37,10 +37,9 @@ async function findOwnedEvent(userId: string, eventId: string) {
  *         description: Event not found
  */
 router.get('/', async (req, res) => {
-  const { id: userId } = res.locals.user
   const { eventId } = req.params as Record<string, string>
 
-  const event = await findOwnedEvent(userId, eventId)
+  const event = await findEvent(eventId)
   if (!event) {
     res.status(404).json({ error: 'Event not found' })
     return
@@ -85,11 +84,10 @@ router.get('/', async (req, res) => {
  *         description: Event not found
  */
 router.post('/', async (req, res) => {
-  const { id: userId } = res.locals.user
   const { eventId } = req.params as Record<string, string>
   const { title, description } = req.body
 
-  const event = await findOwnedEvent(userId, eventId)
+  const event = await findEvent(eventId)
   if (!event) {
     res.status(404).json({ error: 'Event not found' })
     return
@@ -150,11 +148,10 @@ router.post('/', async (req, res) => {
  *         description: Not found
  */
 router.patch('/:sectionId', async (req, res) => {
-  const { id: userId } = res.locals.user
   const { eventId, sectionId } = req.params as Record<string, string>
   const { title, description, order, fields } = req.body
 
-  const event = await findOwnedEvent(userId, eventId)
+  const event = await findEvent(eventId)
   if (!event) {
     res.status(404).json({ error: 'Event not found' })
     return
@@ -215,11 +212,10 @@ router.patch('/:sectionId', async (req, res) => {
  *         description: Event not found
  */
 router.put('/reorder', async (req, res) => {
-  const { id: userId } = res.locals.user
   const { eventId } = req.params as Record<string, string>
   const { order } = req.body as { order: string[] }
 
-  const event = await findOwnedEvent(userId, eventId)
+  const event = await findEvent(eventId)
   if (!event) {
     res.status(404).json({ error: 'Event not found' })
     return
@@ -267,10 +263,9 @@ router.put('/reorder', async (req, res) => {
  *         description: Not found
  */
 router.delete('/:sectionId', async (req, res) => {
-  const { id: userId } = res.locals.user
   const { eventId, sectionId } = req.params as Record<string, string>
 
-  const event = await findOwnedEvent(userId, eventId)
+  const event = await findEvent(eventId)
   if (!event) {
     res.status(404).json({ error: 'Event not found' })
     return

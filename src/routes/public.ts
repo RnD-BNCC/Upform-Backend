@@ -39,8 +39,7 @@ router.get('/events/:id', async (req, res) => {
     return
   }
 
-  const { userId, ...publicEvent } = event
-  res.json(publicEvent)
+  res.json(event)
 })
 
 /**

@@ -32,11 +32,10 @@ const router = Router({ mergeParams: true })
  *         description: Event not found
  */
 router.get('/', requireAuth, async (req, res) => {
-  const { id: userId } = res.locals.user
   const { eventId } = req.params as Record<string, string>
 
-  const event = await prisma.event.findFirst({
-    where: { id: eventId, userId },
+  const event = await prisma.event.findUnique({
+    where: { id: eventId },
   })
   if (!event) {
     res.status(404).json({ error: 'Event not found' })
@@ -135,11 +134,10 @@ router.post('/', async (req, res) => {
  *         description: Not found
  */
 router.get('/:responseId', requireAuth, async (req, res) => {
-  const { id: userId } = res.locals.user
   const { eventId, responseId } = req.params as Record<string, string>
 
-  const event = await prisma.event.findFirst({
-    where: { id: eventId, userId },
+  const event = await prisma.event.findUnique({
+    where: { id: eventId },
   })
   if (!event) {
     res.status(404).json({ error: 'Event not found' })
@@ -185,11 +183,10 @@ router.get('/:responseId', requireAuth, async (req, res) => {
  *         description: Not found
  */
 router.delete('/:responseId', requireAuth, async (req, res) => {
-  const { id: userId } = res.locals.user
   const { eventId, responseId } = req.params as Record<string, string>
 
-  const event = await prisma.event.findFirst({
-    where: { id: eventId, userId },
+  const event = await prisma.event.findUnique({
+    where: { id: eventId },
   })
   if (!event) {
     res.status(404).json({ error: 'Event not found' })
