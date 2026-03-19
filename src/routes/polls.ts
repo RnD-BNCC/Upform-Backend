@@ -37,15 +37,22 @@ router.get('/', async (req, res) => {
   const page = Math.max(1, parseInt(req.query.page as string) || 1)
   const take = Math.min(50, Math.max(1, parseInt(req.query.take as string) || 9))
   const skip = (page - 1) * take
+  const search = req.query.search as string | undefined
+
+  const where: Record<string, unknown> = {}
+  if (search) {
+    where.title = { contains: search, mode: 'insensitive' }
+  }
 
   const [polls, total] = await Promise.all([
     prisma.poll.findMany({
+      where,
       include: { slides: { orderBy: { order: 'asc' } } },
       orderBy: { updatedAt: 'desc' },
       skip,
       take,
     }),
-    prisma.poll.count(),
+    prisma.poll.count({ where }),
   ])
 
   res.json({
