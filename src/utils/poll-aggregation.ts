@@ -38,10 +38,21 @@ export async function aggregateOpenEnded(slideId: string) {
     orderBy: { createdAt: 'desc' },
   })
 
-  return votes.map((v) => ({
-    text: String((v.value as { text?: string }).text ?? ''),
-    createdAt: v.createdAt,
-  }))
+  const textMap = new Map<string, { count: number; createdAt: Date }>()
+  for (const v of votes) {
+    const text = String((v.value as { text?: string }).text ?? '').trim()
+    if (!text) continue
+    const existing = textMap.get(text)
+    if (existing) {
+      existing.count++
+    } else {
+      textMap.set(text, { count: 1, createdAt: v.createdAt })
+    }
+  }
+
+  return Array.from(textMap.entries())
+    .map(([text, { count, createdAt }]) => ({ text, count, createdAt }))
+    .sort((a, b) => b.count - a.count)
 }
 
 export async function aggregateRanking(slideId: string) {
