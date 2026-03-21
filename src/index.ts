@@ -14,6 +14,7 @@ import publicRoutes from './routes/public.js'
 import pollRoutes from './routes/polls.js'
 import pollSlideRoutes from './routes/poll-slides.js'
 import publicPollRoutes from './routes/public-polls.js'
+import uploadRoutes from './routes/upload.js'
 import { requestLogger } from './middlewares/logger.js'
 
 const app = express()
@@ -38,6 +39,7 @@ app.use('/api/public', publicRoutes)
 app.use('/api/polls', pollRoutes)
 app.use('/api/polls/:pollId/slides', pollSlideRoutes)
 app.use('/api/public/polls', publicPollRoutes)
+app.use('/api/upload', uploadRoutes)
 
 app.get('/health', (_req, res) => {
   res.json({
