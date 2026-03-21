@@ -98,6 +98,12 @@ export function initSocket(httpServer: HttpServer) {
       io?.to(`poll:${pollId}`).emit('show-leaderboard', { scores })
     })
 
+    socket.on('hide-leaderboard', ({ pollId }: { pollId: string }) => {
+      pollLeaderboardActive.delete(pollId)
+      pollLeaderboardScores.delete(pollId)
+      socket.to(`poll:${pollId}`).emit('leaderboard-hidden')
+    })
+
     socket.on('reset-scores', ({ pollId }: { pollId: string }) => {
       resetScores(pollId)
       pollLeaderboardActive.delete(pollId)
