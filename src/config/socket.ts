@@ -6,6 +6,7 @@ let io: Server | null = null
 
 const pollParticipants = new Map<string, Map<string, { id: string; name: string; avatarSeed?: string; score: number }>>()
 const pollLeaderboardActive = new Map<string, boolean>()
+const pollLeaderboardScores = new Map<string, Array<{ id: string; name: string; avatarSeed?: string; score: number }>>()
 
 function broadcastParticipantList(pollId: string) {
   const map = pollParticipants.get(pollId)
@@ -59,7 +60,7 @@ export function initSocket(httpServer: HttpServer) {
       }
 
       if (pollLeaderboardActive.get(pollId)) {
-        const scores = getPollScores(pollId)
+        const scores = pollLeaderboardScores.get(pollId) ?? []
         socket.emit('show-leaderboard', { scores })
       }
 
@@ -93,12 +94,14 @@ export function initSocket(httpServer: HttpServer) {
     socket.on('broadcast-leaderboard', ({ pollId }: { pollId: string }) => {
       const scores = getPollScores(pollId)
       pollLeaderboardActive.set(pollId, true)
+      pollLeaderboardScores.set(pollId, scores)
       io?.to(`poll:${pollId}`).emit('show-leaderboard', { scores })
     })
 
     socket.on('reset-scores', ({ pollId }: { pollId: string }) => {
       resetScores(pollId)
       pollLeaderboardActive.delete(pollId)
+      pollLeaderboardScores.delete(pollId)
     })
 
     socket.on('leave-poll', (pollId: string) => {
@@ -112,7 +115,6 @@ export function initSocket(httpServer: HttpServer) {
         broadcastParticipantList(pollId)
         if (pollParticipants.get(pollId)!.size === 0) {
           pollParticipants.delete(pollId)
-          pollLeaderboardActive.delete(pollId)
         }
       }
     })
@@ -131,7 +133,6 @@ export function initSocket(httpServer: HttpServer) {
             broadcastParticipantList(pollId)
             if (pollParticipants.get(pollId)!.size === 0) {
               pollParticipants.delete(pollId)
-              pollLeaderboardActive.delete(pollId)
             }
           }
         }
