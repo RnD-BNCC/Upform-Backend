@@ -1,6 +1,6 @@
 import { Router } from 'express'
 import { prisma } from '../config/prisma.js'
-import { getIO } from '../config/socket.js'
+import { getIO, addScore } from '../config/socket.js'
 import { aggregateResults } from '../utils/poll-aggregation.js'
 
 const router = Router()
@@ -34,7 +34,14 @@ router.get('/join/:code', async (req, res) => {
     return
   }
 
-  res.json(poll)
+  const sanitizedPoll = {
+    ...poll,
+    slides: poll.slides.map(slide => {
+      const { correctAnswer, correctAnswers, ...safeSettings } = (slide.settings as Record<string, unknown>) ?? {}
+      return { ...slide, settings: safeSettings }
+    }),
+  }
+  res.json(sanitizedPoll)
 })
 
 /**
@@ -96,14 +103,42 @@ router.post('/:pollId/slides/:slideId/vote', async (req, res) => {
     return
   }
 
-  await prisma.pollVote.upsert({
+  const vote = await prisma.pollVote.upsert({
     where: { slideId_participantId: { slideId, participantId } },
     create: { slideId, participantId, value },
     update: { value },
   })
 
   const results = await aggregateResults(slide.type, slideId)
-  getIO().to(`poll:${pollId}`).emit('vote-update', { slideId, results })
+  const io = getIO()
+  io.to(`poll:${pollId}`).emit('vote-update', { slideId, results })
+
+  // Check correctness and award points for quiz slides
+  const settings = (slide.settings as Record<string, unknown>) ?? {}
+  const correctAnswer = settings.correctAnswer as string | undefined
+  const correctAnswers = settings.correctAnswers as string[] | undefined
+  const isQuizSlide = !!(correctAnswer || (correctAnswers && correctAnswers.length > 0))
+
+  if (isQuizSlide) {
+    let isCorrect = false
+    if (slide.type === 'multiple_choice' && correctAnswer) {
+      isCorrect = (value as { option?: string }).option === correctAnswer
+    } else if (slide.type === 'open_ended' && correctAnswers && correctAnswers.length > 0) {
+      const submitted = (value as { text?: string }).text?.trim().toLowerCase() ?? ''
+      isCorrect = correctAnswers.some(a => a.trim().toLowerCase() === submitted)
+    }
+
+    let points = 0
+    if (isCorrect) {
+      const priorVotes = await prisma.pollVote.count({
+        where: { slideId, createdAt: { lt: vote.createdAt } },
+      })
+      points = Math.max(100, 1000 - priorVotes * 100)
+      addScore(pollId, participantId, points)
+    }
+
+    io.to(`poll:${pollId}`).emit('score-update', { participantId, points, isCorrect })
+  }
 
   res.json({ ok: true })
 })
