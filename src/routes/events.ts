@@ -247,7 +247,7 @@ router.post('/', async (req, res) => {
  *         description: Not found
  */
 router.patch('/:id', async (req, res) => {
-  const { name, description, status, color } = req.body
+  const { name, description, status, color, image } = req.body
 
   const existing = await prisma.event.findUnique({
     where: { id: req.params.id },
@@ -265,6 +265,7 @@ router.patch('/:id', async (req, res) => {
       ...(description !== undefined && { description }),
       ...(status !== undefined && { status }),
       ...(color !== undefined && { color }),
+      ...(image !== undefined && { image }),
     },
     include: {
       sections: { orderBy: { order: 'asc' } },
