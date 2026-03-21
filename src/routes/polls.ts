@@ -1,7 +1,7 @@
 import { Router } from 'express'
 import { prisma } from '../config/prisma.js'
 import { requireAuth } from '../middlewares/auth.js'
-import { getIO } from '../config/socket.js'
+import { getIO, getPollScores } from '../config/socket.js'
 
 const router = Router()
 router.use(requireAuth)
@@ -178,7 +178,7 @@ router.post('/', async (req, res) => {
  *         description: Not found
  */
 router.patch('/:id', async (req, res) => {
-  const { title, status, currentSlide } = req.body
+  const { title, status, currentSlide, settings } = req.body
 
   const existing = await prisma.poll.findUnique({ where: { id: req.params.id } })
   if (!existing) {
@@ -192,6 +192,7 @@ router.patch('/:id', async (req, res) => {
       ...(title !== undefined && { title }),
       ...(status !== undefined && { status }),
       ...(currentSlide !== undefined && { currentSlide }),
+      ...(settings !== undefined && { settings }),
     },
     include: { slides: { orderBy: { order: 'asc' } } },
   })
@@ -236,6 +237,22 @@ router.delete('/:id', async (req, res) => {
   }
 
   await prisma.poll.delete({ where: { id: req.params.id } })
+  res.status(204).send()
+})
+
+router.get('/:id/scores', async (req, res) => {
+  const scores = getPollScores(req.params.id)
+  res.json(scores)
+})
+
+router.delete('/:id/votes', async (req, res) => {
+  const slides = await prisma.pollSlide.findMany({
+    where: { pollId: req.params.id },
+    select: { id: true },
+  })
+  await prisma.pollVote.deleteMany({
+    where: { slideId: { in: slides.map(s => s.id) } },
+  })
   res.status(204).send()
 })
 
