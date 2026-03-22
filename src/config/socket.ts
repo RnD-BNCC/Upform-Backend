@@ -101,13 +101,91 @@ export function initSocket(httpServer: HttpServer) {
     socket.on('hide-leaderboard', ({ pollId }: { pollId: string }) => {
       pollLeaderboardActive.delete(pollId)
       pollLeaderboardScores.delete(pollId)
-      socket.to(`poll:${pollId}`).emit('leaderboard-hidden')
+    })
+
+    socket.on('qa-highlight', ({ pollId, voteId }: { pollId: string; voteId: string | null }) => {
+      io?.to(`poll:${pollId}`).emit('qa-highlight', { voteId })
     })
 
     socket.on('reset-scores', ({ pollId }: { pollId: string }) => {
       resetScores(pollId)
       pollLeaderboardActive.delete(pollId)
       pollLeaderboardScores.delete(pollId)
+    })
+
+    socket.on('question:submit', async ({ pollId, text, authorName, authorId }: { pollId: string; text: string; authorName: string; authorId: string }) => {
+      // Validasi text
+      if (!text || text.trim().length === 0) {
+        socket.emit('question:error', { code: 'VALIDATION_ERROR', message: 'Pertanyaan tidak boleh kosong.' })
+        return
+      }
+      if (text.length > 200) {
+        socket.emit('question:error', { code: 'VALIDATION_ERROR', message: 'Pertanyaan maksimal 200 karakter.' })
+        return
+      }
+
+      // Validasi limit: max 5 pertanyaan per authorId per pollId
+      if (authorId) {
+        const count = await prisma.question.count({ where: { pollId, authorId } })
+        if (count >= 5) {
+          socket.emit('question:error', { code: 'LIMIT_EXCEEDED', message: 'Kamu sudah mencapai batas maksimal 5 pertanyaan.' })
+          return
+        }
+      }
+
+      const question = await prisma.question.create({
+        data: { pollId, text: text.trim(), authorName, authorId },
+      })
+
+      io?.to(`poll:${pollId}`).emit('question:new', {
+        id: question.id,
+        text: question.text,
+        authorName: question.authorName,
+        likeCount: question.likeCount,
+        createdAt: question.createdAt.toISOString(),
+      })
+    })
+
+    socket.on('question:like', async ({ pollId, questionId, userId, like }: { pollId: string; questionId: string; userId: string; like: boolean }) => {
+      try {
+        await prisma.$transaction(async (tx) => {
+          if (like) {
+            await tx.questionLike.upsert({
+              where: { questionId_userId: { questionId, userId } },
+              create: { questionId, userId },
+              update: {},
+            })
+            await tx.question.update({
+              where: { id: questionId },
+              data: { likeCount: { increment: 1 } },
+            })
+          } else {
+            const existing = await tx.questionLike.findUnique({
+              where: { questionId_userId: { questionId, userId } },
+            })
+            if (existing) {
+              await tx.questionLike.delete({ where: { questionId_userId: { questionId, userId } } })
+              await tx.question.update({
+                where: { id: questionId },
+                data: { likeCount: { decrement: 1 } },
+              })
+            }
+          }
+        })
+
+        const [question, likes] = await Promise.all([
+          prisma.question.findUnique({ where: { id: questionId }, select: { likeCount: true } }),
+          prisma.questionLike.findMany({ where: { questionId }, select: { userId: true } }),
+        ])
+
+        io?.to(`poll:${pollId}`).emit('question:like_updated', {
+          questionId,
+          likeCount: question?.likeCount ?? 0,
+          likedByIds: likes.map(l => l.userId),
+        })
+      } catch (error) {
+        console.error('[socket:question:like] Error:', error)
+      }
     })
 
     socket.on('leave-poll', (pollId: string) => {

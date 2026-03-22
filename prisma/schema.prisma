@@ -98,8 +98,33 @@ model Poll {
   currentSlide Int         @default(0)
   settings     Json        @default("{}")
   slides       PollSlide[]
+  questions    Question[]
   createdAt    DateTime    @default(now())
   updatedAt    DateTime    @updatedAt
+}
+
+model Question {
+  id          String         @id @default(uuid())
+  pollId      String
+  text        String         @db.VarChar(200)
+  authorName  String
+  authorId    String?
+  likeCount   Int            @default(0)
+  createdAt   DateTime       @default(now())
+
+  likes       QuestionLike[]
+  poll        Poll           @relation(fields: [pollId], references: [id], onDelete: Cascade)
+}
+
+model QuestionLike {
+  id         String   @id @default(uuid())
+  questionId String
+  userId     String
+  createdAt  DateTime @default(now())
+
+  question   Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  @@unique([questionId, userId])
 }
 
 model PollSlide {
@@ -123,6 +148,7 @@ model PollVote {
   slide         PollSlide @relation(fields: [slideId], references: [id], onDelete: Cascade)
   participantId String
   value         Json
+  isAnswered    Boolean   @default(false)
   createdAt     DateTime  @default(now())
 
   @@unique([slideId, participantId])

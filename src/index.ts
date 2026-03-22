@@ -14,6 +14,7 @@ import publicRoutes from './routes/public.js'
 import pollRoutes from './routes/polls.js'
 import pollSlideRoutes from './routes/poll-slides.js'
 import publicPollRoutes from './routes/public-polls.js'
+import questionRoutes from './routes/questions.js'
 import uploadRoutes from './routes/upload.js'
 import { requestLogger } from './middlewares/logger.js'
 
@@ -38,6 +39,7 @@ app.use('/api/events/:eventId/responses', responseRoutes)
 app.use('/api/public', publicRoutes)
 app.use('/api/polls', pollRoutes)
 app.use('/api/polls/:pollId/slides', pollSlideRoutes)
+app.use('/api/polls/:pollId/questions', questionRoutes)
 app.use('/api/public/polls', publicPollRoutes)
 app.use('/api/upload', uploadRoutes)
 
