@@ -70,4 +70,10 @@ router.get('/', async (req: import('express').Request<{ pollId: string }>, res) 
   res.json({ questions })
 })
 
+router.delete('/', async (req: import('express').Request<{ pollId: string }>, res) => {
+  const { pollId } = req.params
+  await prisma.question.deleteMany({ where: { pollId } })
+  res.json({ success: true })
+})
+
 export default router
