@@ -142,9 +142,25 @@ router.post('/:pollId/slides/:slideId/vote', async (req, res) => {
 
     let points = 0
     if (isCorrect) {
-      const priorVotes = await prisma.pollVote.count({
-        where: { slideId, createdAt: { lt: vote.createdAt } },
-      })
+      let priorVotes = 0
+      if (slide.type === 'multiple_choice' && correctAnswer) {
+        priorVotes = await prisma.pollVote.count({
+          where: { slideId, createdAt: { lt: vote.createdAt }, value: { path: ['option'], equals: correctAnswer } },
+        })
+      } else if (slide.type === 'open_ended' && correctAnswers) {
+        const prior = await prisma.pollVote.findMany({
+          where: { slideId, createdAt: { lt: vote.createdAt } },
+          select: { value: true },
+        })
+        priorVotes = prior.filter(v => {
+          const text = (v.value as { text?: string }).text?.trim().toLowerCase() ?? ''
+          return correctAnswers.some(a => a.trim().toLowerCase() === text)
+        }).length
+      } else if (slide.type === 'guess_number' && correctNumber !== undefined) {
+        priorVotes = await prisma.pollVote.count({
+          where: { slideId, createdAt: { lt: vote.createdAt }, value: { path: ['value'], equals: correctNumber } },
+        })
+      }
       points = Math.max(100, 1000 - priorVotes * 100)
       addScore(pollId, participantId, points)
     }

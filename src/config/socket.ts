@@ -81,6 +81,10 @@ export function initSocket(httpServer: HttpServer) {
       socket.to(`poll:${pollId}`).emit('countdown', { count })
     })
 
+    socket.on('broadcast-reveal-answer', ({ pollId }: { pollId: string }) => {
+      socket.to(`poll:${pollId}`).emit('reveal-answer')
+    })
+
     socket.on('broadcast-poll-state', ({ pollId, status, currentSlide }: { pollId: string; status?: string; currentSlide?: number }) => {
       if (status) socket.to(`poll:${pollId}`).emit('poll-state', { status })
       if (currentSlide !== undefined) socket.to(`poll:${pollId}`).emit('slide-change', { currentSlide })
