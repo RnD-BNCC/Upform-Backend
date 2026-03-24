@@ -37,7 +37,7 @@ router.get('/join/:code', async (req, res) => {
   const sanitizedPoll = {
     ...poll,
     slides: poll.slides.map(slide => {
-      const { correctAnswer, correctAnswers, ...safeSettings } = (slide.settings as Record<string, unknown>) ?? {}
+      const { correctAnswer, correctAnswers, correctNumber, ...safeSettings } = (slide.settings as Record<string, unknown>) ?? {}
       return { ...slide, settings: safeSettings }
     }),
   }
@@ -103,21 +103,31 @@ router.post('/:pollId/slides/:slideId/vote', async (req, res) => {
     return
   }
 
-  const vote = await prisma.pollVote.upsert({
-    where: { slideId_participantId: { slideId, participantId } },
-    create: { slideId, participantId, value },
-    update: { value },
-  })
+  // Q&A slides allow multiple submissions per participant (each question is a new record)
+  let vote
+  if (slide.type === 'qa') {
+    const uniqueParticipantId = `${participantId}_${Date.now()}`
+    vote = await prisma.pollVote.create({
+      data: { slideId, participantId: uniqueParticipantId, value },
+    })
+  } else {
+    vote = await prisma.pollVote.upsert({
+      where: { slideId_participantId: { slideId, participantId } },
+      create: { slideId, participantId, value },
+      update: { value },
+    })
+  }
 
   const results = await aggregateResults(slide.type, slideId)
   const io = getIO()
   io.to(`poll:${pollId}`).emit('vote-update', { slideId, results })
 
-  // Check correctness and award points for quiz slides
   const settings = (slide.settings as Record<string, unknown>) ?? {}
   const correctAnswer = settings.correctAnswer as string | undefined
   const correctAnswers = settings.correctAnswers as string[] | undefined
-  const isQuizSlide = !!(correctAnswer || (correctAnswers && correctAnswers.length > 0))
+  const correctNumber = settings.correctNumber as number | undefined
+  const quizTypes = ['multiple_choice', 'open_ended', 'guess_number']
+  const isQuizSlide = quizTypes.includes(slide.type) && !!(correctAnswer || (correctAnswers && correctAnswers.length > 0) || correctNumber !== undefined)
 
   if (isQuizSlide) {
     let isCorrect = false
@@ -126,6 +136,8 @@ router.post('/:pollId/slides/:slideId/vote', async (req, res) => {
     } else if (slide.type === 'open_ended' && correctAnswers && correctAnswers.length > 0) {
       const submitted = (value as { text?: string }).text?.trim().toLowerCase() ?? ''
       isCorrect = correctAnswers.some(a => a.trim().toLowerCase() === submitted)
+    } else if (slide.type === 'guess_number' && correctNumber !== undefined) {
+      isCorrect = Number((value as { value?: number }).value) === correctNumber
     }
 
     let points = 0
@@ -181,6 +193,60 @@ router.get('/:pollId/slides/:slideId/results', async (req, res) => {
 
   const results = await aggregateResults(slide.type, slideId)
   res.json(results)
+})
+
+/**
+ * @swagger
+ * /api/public/polls/{pollId}/slides/{slideId}/votes/{voteId}/answer:
+ *   patch:
+ *     summary: Toggle mark-as-answered on a Q&A vote
+ *     tags: [Public Polls]
+ *     parameters:
+ *       - in: path
+ *         name: pollId
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *       - in: path
+ *         name: slideId
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *       - in: path
+ *         name: voteId
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *     responses:
+ *       200:
+ *         description: Vote updated
+ *       404:
+ *         description: Vote not found
+ */
+router.patch('/:pollId/slides/:slideId/votes/:voteId/answer', async (req, res) => {
+  const { slideId, voteId } = req.params
+
+  const vote = await prisma.pollVote.findFirst({
+    where: { id: voteId, slideId },
+  })
+  if (!vote) {
+    res.status(404).json({ error: 'Vote not found' })
+    return
+  }
+
+  const updated = await prisma.pollVote.update({
+    where: { id: voteId },
+    data: { isAnswered: !vote.isAnswered },
+  })
+
+  const results = await aggregateResults('qa', slideId)
+  const io = getIO()
+  io.to(`poll:${req.params.pollId}`).emit('vote-update', { slideId, results })
+
+  res.json({ ok: true, isAnswered: updated.isAnswered })
 })
 
 export default router

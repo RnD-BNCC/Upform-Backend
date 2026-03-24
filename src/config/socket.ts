@@ -107,14 +107,20 @@ export function initSocket(httpServer: HttpServer) {
       io?.to(`poll:${pollId}`).emit('qa-highlight', { voteId })
     })
 
-    socket.on('reset-scores', ({ pollId }: { pollId: string }) => {
+    socket.on('reset-scores', async ({ pollId }: { pollId: string }) => {
       resetScores(pollId)
       pollLeaderboardActive.delete(pollId)
       pollLeaderboardScores.delete(pollId)
+      // reset Q&A on score reset
+      try {
+        await prisma.questionLike.deleteMany({ where: { question: { pollId } } })
+        await prisma.question.deleteMany({ where: { pollId } })
+      } catch (err) {
+        console.error('[socket:reset-scores] Failed to clear questions:', err)
+      }
     })
 
     socket.on('question:submit', async ({ pollId, text, authorName, authorId }: { pollId: string; text: string; authorName: string; authorId: string }) => {
-      // Validasi text
       if (!text || text.trim().length === 0) {
         socket.emit('question:error', { code: 'VALIDATION_ERROR', message: 'Pertanyaan tidak boleh kosong.' })
         return
@@ -124,7 +130,6 @@ export function initSocket(httpServer: HttpServer) {
         return
       }
 
-      // Validasi limit: max 5 pertanyaan per authorId per pollId
       if (authorId) {
         const count = await prisma.question.count({ where: { pollId, authorId } })
         if (count >= 5) {
@@ -137,12 +142,35 @@ export function initSocket(httpServer: HttpServer) {
         data: { pollId, text: text.trim(), authorName, authorId },
       })
 
+      // Create PollVote FIRST so we can include pollVoteId in question:new
+      let pollVoteId: string | undefined
+      try {
+        const slide = await prisma.pollSlide.findFirst({ where: { pollId, type: 'qa' } })
+        if (slide) {
+          const pollVote = await prisma.pollVote.create({
+            data: {
+              slideId: slide.id,
+              participantId: `${authorId}_qa_${Date.now()}`,
+              value: { text: text.trim(), participantName: authorName },
+            },
+          })
+          pollVoteId = pollVote.id
+
+          const { aggregateResults } = await import('../utils/poll-aggregation.js')
+          const results = await aggregateResults('qa', slide.id)
+          io?.to(`poll:${pollId}`).emit('vote-update', { slideId: slide.id, results })
+        }
+      } catch (err) {
+        console.error('[socket:question:submit] Failed to create PollVote:', err)
+      }
+
       io?.to(`poll:${pollId}`).emit('question:new', {
         id: question.id,
         text: question.text,
         authorName: question.authorName,
         likeCount: question.likeCount,
         createdAt: question.createdAt.toISOString(),
+        pollVoteId,
       })
     })
 
