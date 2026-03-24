@@ -3,11 +3,10 @@ import multer from 'multer'
 import crypto from 'crypto'
 import path from 'path'
 import { PutObjectCommand } from '@aws-sdk/client-s3'
-import { s3, S3_BUCKET } from '../config/s3.js'
-import { requireAuth } from '../middlewares/auth.js'
+import { s3, S3_BUCKET } from '../../config/s3.js'
+import { requireAuth } from '../../middlewares/auth.js'
 
 const router = Router()
-router.use(requireAuth)
 
 const ALLOWED_TYPES = [
   'image/png',
@@ -33,7 +32,7 @@ const upload = multer({
   },
 })
 
-router.post('/', upload.single('file'), async (req, res) => {
+router.post('/', requireAuth, upload.single('file'), async (req, res) => {
   const file = req.file
   if (!file) {
     res.status(400).json({ error: 'No file provided' })
