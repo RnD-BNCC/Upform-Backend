@@ -126,15 +126,15 @@ router.post('/:pollId/slides/:slideId/vote', async (req, res) => {
   const correctAnswer = settings.correctAnswer as string | undefined
   const correctAnswers = settings.correctAnswers as string[] | undefined
   const correctNumber = settings.correctNumber as number | undefined
-  const quizTypes = ['multiple_choice', 'open_ended', 'guess_number']
+  const quizTypes = ['multiple_choice', 'word_cloud', 'guess_number']
   const isQuizSlide = quizTypes.includes(slide.type) && !!(correctAnswer || (correctAnswers && correctAnswers.length > 0) || correctNumber !== undefined)
 
   if (isQuizSlide) {
     let isCorrect = false
     if (slide.type === 'multiple_choice' && correctAnswer) {
       isCorrect = (value as { option?: string }).option === correctAnswer
-    } else if (slide.type === 'open_ended' && correctAnswers && correctAnswers.length > 0) {
-      const submitted = (value as { text?: string }).text?.trim().toLowerCase() ?? ''
+    } else if (slide.type === 'word_cloud' && correctAnswers && correctAnswers.length > 0) {
+      const submitted = (value as { word?: string }).word?.trim().toLowerCase() ?? ''
       isCorrect = correctAnswers.some(a => a.trim().toLowerCase() === submitted)
     } else if (slide.type === 'guess_number' && correctNumber !== undefined) {
       isCorrect = Number((value as { value?: number }).value) === correctNumber
@@ -147,14 +147,14 @@ router.post('/:pollId/slides/:slideId/vote', async (req, res) => {
         priorVotes = await prisma.pollVote.count({
           where: { slideId, createdAt: { lt: vote.createdAt }, value: { path: ['option'], equals: correctAnswer } },
         })
-      } else if (slide.type === 'open_ended' && correctAnswers) {
+      } else if (slide.type === 'word_cloud' && correctAnswers) {
         const prior = await prisma.pollVote.findMany({
           where: { slideId, createdAt: { lt: vote.createdAt } },
           select: { value: true },
         })
         priorVotes = prior.filter(v => {
-          const text = (v.value as { text?: string }).text?.trim().toLowerCase() ?? ''
-          return correctAnswers.some(a => a.trim().toLowerCase() === text)
+          const word = (v.value as { word?: string }).word?.trim().toLowerCase() ?? ''
+          return correctAnswers.some(a => a.trim().toLowerCase() === word)
         }).length
       } else if (slide.type === 'guess_number' && correctNumber !== undefined) {
         priorVotes = await prisma.pollVote.count({
