@@ -28,7 +28,6 @@ const options: swaggerJSDoc.Options = {
             description: { type: 'string' },
             status: { type: 'string', enum: ['draft', 'active', 'closed'] },
             color: { type: 'string' },
-            userId: { type: 'string' },
             sections: { type: 'array', items: { $ref: '#/components/schemas/Section' } },
             createdAt: { type: 'string', format: 'date-time' },
             updatedAt: { type: 'string', format: 'date-time' },
