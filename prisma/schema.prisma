@@ -17,7 +17,6 @@ model User {
   updatedAt     DateTime
   sessions      Session[]
   accounts      Account[]
-  events        Event[]
 }
 
 model Session {
@@ -59,17 +58,18 @@ model Verification {
 }
 
 model Event {
-  id          String     @id @default(uuid())
-  name        String     @default("")
-  description String     @default("")
-  status      String     @default("draft")
-  color       String     @default("#0054a5")
-  userId      String
-  user        User       @relation(fields: [userId], references: [id], onDelete: Cascade)
-  sections    Section[]
-  responses   Response[]
-  createdAt   DateTime   @default(now())
-  updatedAt   DateTime   @updatedAt
+  id              String     @id @default(uuid())
+  name            String     @default("")
+  description     String     @default("")
+  status          String     @default("draft")
+  color           String     @default("#0054a5")
+  image           String?
+  spreadsheetId   String?
+  spreadsheetUrl  String?
+  sections        Section[]
+  responses       Response[]
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
 }
 
 model Section {
@@ -90,4 +90,68 @@ model Response {
   eventId     String
   event       Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
   submittedAt DateTime @default(now())
+}
+
+model Poll {
+  id           String      @id @default(uuid())
+  title        String      @default("")
+  code         String      @unique
+  status       String      @default("waiting")
+  currentSlide Int         @default(0)
+  settings     Json        @default("{}")
+  slides       PollSlide[]
+  questions    Question[]
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+}
+
+model Question {
+  id          String         @id @default(uuid())
+  pollId      String
+  text        String         @db.VarChar(200)
+  authorName  String
+  authorId    String?
+  likeCount   Int            @default(0)
+  createdAt   DateTime       @default(now())
+
+  likes       QuestionLike[]
+  poll        Poll           @relation(fields: [pollId], references: [id], onDelete: Cascade)
+}
+
+model QuestionLike {
+  id         String   @id @default(uuid())
+  questionId String
+  userId     String
+  createdAt  DateTime @default(now())
+
+  question   Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  @@unique([questionId, userId])
+}
+
+model PollSlide {
+  id        String     @id @default(uuid())
+  pollId    String
+  poll      Poll       @relation(fields: [pollId], references: [id], onDelete: Cascade)
+  order     Int        @default(0)
+  type      String
+  question  String     @default("")
+  options   Json       @default("[]")
+  settings  Json       @default("{}")
+  locked    Boolean    @default(false)
+  votes     PollVote[]
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+}
+
+model PollVote {
+  id            String    @id @default(uuid())
+  slideId       String
+  slide         PollSlide @relation(fields: [slideId], references: [id], onDelete: Cascade)
+  participantId String
+  value         Json
+  isAnswered    Boolean   @default(false)
+  createdAt     DateTime  @default(now())
+
+  @@unique([slideId, participantId])
 }

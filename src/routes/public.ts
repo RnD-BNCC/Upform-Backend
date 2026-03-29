@@ -39,8 +39,57 @@ router.get('/events/:id', async (req, res) => {
     return
   }
 
-  const { userId, ...publicEvent } = event
-  res.json(publicEvent)
+  res.json(event)
+})
+
+/**
+ * @swagger
+ * /api/public/events/{id}/responses:
+ *   post:
+ *     summary: Submit a form response (public — no auth required)
+ *     tags: [Public]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/SubmitResponse'
+ *     responses:
+ *       201:
+ *         description: Submitted response
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Response'
+ *       404:
+ *         description: Event not found or not active
+ */
+router.post('/events/:id/responses', async (req, res) => {
+  const { answers } = req.body
+
+  const event = await prisma.event.findFirst({
+    where: { id: req.params.id, status: 'active' },
+  })
+  if (!event) {
+    res.status(404).json({ error: 'Event not found or not active' })
+    return
+  }
+
+  const response = await prisma.response.create({
+    data: {
+      eventId: req.params.id,
+      answers: answers ?? {},
+    },
+  })
+
+  res.status(201).json(response)
 })
 
 export default router

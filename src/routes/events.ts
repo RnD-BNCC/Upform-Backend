@@ -80,14 +80,13 @@ router.use(requireAuth)
  *               $ref: '#/components/schemas/Error'
  */
 router.get('/', async (req, res) => {
-  const { id: userId } = res.locals.user
   const page = Math.max(1, parseInt(req.query.page as string) || 1)
   const take = Math.min(50, Math.max(1, parseInt(req.query.take as string) || 9))
   const skip = (page - 1) * take
   const status = req.query.status as string | undefined
   const search = req.query.search as string | undefined
 
-  const where: Record<string, unknown> = { userId }
+  const where: Record<string, unknown> = {}
   if (status && ['draft', 'active', 'closed'].includes(status)) {
     where.status = status
   }
@@ -108,7 +107,6 @@ router.get('/', async (req, res) => {
     }),
     prisma.event.count({ where }),
     prisma.event.findMany({
-      where: { userId },
       select: { status: true, _count: { select: { responses: true } } },
     }),
   ])
@@ -161,10 +159,8 @@ router.get('/', async (req, res) => {
  *               $ref: '#/components/schemas/Error'
  */
 router.get('/:id', async (req, res) => {
-  const { id: userId } = res.locals.user
-
-  const event = await prisma.event.findFirst({
-    where: { id: req.params.id, userId },
+  const event = await prisma.event.findUnique({
+    where: { id: req.params.id },
     include: {
       sections: { orderBy: { order: 'asc' } },
       responses: { orderBy: { submittedAt: 'desc' } },
@@ -201,7 +197,6 @@ router.get('/:id', async (req, res) => {
  *               $ref: '#/components/schemas/Event'
  */
 router.post('/', async (req, res) => {
-  const { id: userId } = res.locals.user
   const { name, description, color } = req.body
 
   const event = await prisma.event.create({
@@ -209,7 +204,6 @@ router.post('/', async (req, res) => {
       name: name ?? '',
       description: description ?? '',
       color: color ?? '#0054a5',
-      userId,
       sections: {
         create: { title: 'Section 1', order: 0, fields: [] },
       },
@@ -253,11 +247,10 @@ router.post('/', async (req, res) => {
  *         description: Not found
  */
 router.patch('/:id', async (req, res) => {
-  const { id: userId } = res.locals.user
-  const { name, description, status, color } = req.body
+  const { name, description, status, color, image } = req.body
 
-  const existing = await prisma.event.findFirst({
-    where: { id: req.params.id, userId },
+  const existing = await prisma.event.findUnique({
+    where: { id: req.params.id },
   })
 
   if (!existing) {
@@ -272,6 +265,7 @@ router.patch('/:id', async (req, res) => {
       ...(description !== undefined && { description }),
       ...(status !== undefined && { status }),
       ...(color !== undefined && { color }),
+      ...(image !== undefined && { image }),
     },
     include: {
       sections: { orderBy: { order: 'asc' } },
@@ -303,10 +297,8 @@ router.patch('/:id', async (req, res) => {
  *         description: Not found
  */
 router.delete('/:id', async (req, res) => {
-  const { id: userId } = res.locals.user
-
-  const existing = await prisma.event.findFirst({
-    where: { id: req.params.id, userId },
+  const existing = await prisma.event.findUnique({
+    where: { id: req.params.id },
   })
 
   if (!existing) {
