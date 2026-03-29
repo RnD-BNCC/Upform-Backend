@@ -1,7 +1,7 @@
 import { Router } from 'express'
 import { prisma } from '../config/prisma.js'
 import { requireAuth } from '../middlewares/auth.js'
-import { getIO, getPollScores } from '../config/socket.js'
+import { getPollScores } from '../config/socket.js'
 
 const router = Router()
 router.use(requireAuth)
@@ -196,14 +196,6 @@ router.patch('/:id', async (req, res) => {
     },
     include: { slides: { orderBy: { order: 'asc' } } },
   })
-
-  const io = getIO()
-  if (status !== undefined) {
-    io.to(`poll:${poll.id}`).emit('poll-state', { status: poll.status })
-  }
-  if (currentSlide !== undefined) {
-    io.to(`poll:${poll.id}`).emit('slide-change', { currentSlide: poll.currentSlide })
-  }
 
   res.json(poll)
 })

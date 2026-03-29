@@ -16,6 +16,7 @@ import pollSlideRoutes from './routes/poll-slides.js'
 import publicPollRoutes from './routes/public-polls.js'
 import questionRoutes from './routes/questions.js'
 import uploadRoutes from './routes/upload/index.js'
+import spreadsheetRoutes from './routes/spreadsheet.js'
 import { requestLogger } from './middlewares/logger.js'
 
 const app = express()
@@ -36,6 +37,7 @@ app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec))
 app.use('/api/events', eventRoutes)
 app.use('/api/events/:eventId/sections', sectionRoutes)
 app.use('/api/events/:eventId/responses', responseRoutes)
+app.use('/api/events/:eventId/spreadsheet', spreadsheetRoutes)
 app.use('/api/public', publicRoutes)
 app.use('/api/polls/:pollId/questions', questionRoutes)
 app.use('/api/polls', pollRoutes)
