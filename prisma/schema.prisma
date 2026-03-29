@@ -58,16 +58,18 @@ model Verification {
 }
 
 model Event {
-  id          String     @id @default(uuid())
-  name        String     @default("")
-  description String     @default("")
-  status      String     @default("draft")
-  color       String     @default("#0054a5")
-  image       String?
-  sections    Section[]
-  responses   Response[]
-  createdAt   DateTime   @default(now())
-  updatedAt   DateTime   @updatedAt
+  id              String     @id @default(uuid())
+  name            String     @default("")
+  description     String     @default("")
+  status          String     @default("draft")
+  color           String     @default("#0054a5")
+  image           String?
+  spreadsheetId   String?
+  spreadsheetUrl  String?
+  sections        Section[]
+  responses       Response[]
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
 }
 
 model Section {
