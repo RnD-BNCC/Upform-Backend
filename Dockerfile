@@ -6,6 +6,7 @@ RUN npm ci
 
 COPY prisma ./prisma
 COPY prisma.config.ts ./
+ENV DATABASE_URL=postgresql://dummy:dummy@dummy:5432/dummy
 RUN npx prisma generate
 
 COPY tsconfig.json ./
