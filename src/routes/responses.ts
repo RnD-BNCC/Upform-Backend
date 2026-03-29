@@ -1,6 +1,7 @@
 import { Router } from 'express'
 import { prisma } from '../config/prisma.js'
 import { requireAuth } from '../middlewares/auth.js'
+import { syncAndAppendRow } from '../config/google-sheets.js'
 
 const router = Router({ mergeParams: true })
 
@@ -86,6 +87,7 @@ router.post('/', async (req, res) => {
 
   const event = await prisma.event.findFirst({
     where: { id: eventId, status: 'active' },
+    include: { sections: { orderBy: { order: 'asc' } } },
   })
   if (!event) {
     res.status(404).json({ error: 'Event not found or not active' })
@@ -100,6 +102,20 @@ router.post('/', async (req, res) => {
   })
 
   res.status(201).json(response)
+
+  // Fire-and-forget: sync headers + append row to Google Sheet if connected
+  if (event.spreadsheetId) {
+    const allFields = event.sections.flatMap((s) => {
+      const fields = s.fields as Array<{ id: string; label: string; type: string }>
+      return fields.filter((f) => f.type !== 'title_block' && f.type !== 'image_block')
+    })
+    syncAndAppendRow(
+      event.spreadsheetId,
+      allFields,
+      answers as Record<string, string | string[]>,
+      response.submittedAt.toISOString(),
+    ).catch((err) => console.error('[spreadsheet sync+append]', err))
+  }
 })
 
 /**
