@@ -17,13 +17,17 @@ import publicPollRoutes from './routes/public-polls.js'
 import questionRoutes from './routes/questions.js'
 import uploadRoutes from './routes/upload/index.js'
 import spreadsheetRoutes from './routes/spreadsheet.js'
+import emailBlastRoutes from './routes/email-blasts.js'
+import galleryRoutes from './routes/gallery.js'
 import { requestLogger } from './middlewares/logger.js'
+import { startEmailWorker } from './workers/email.worker.js'
 
 const app = express()
 const server = createServer(app)
 const PORT = process.env.PORT ?? 3001
 
 initSocket(server)
+startEmailWorker()
 
 app.use(cors(corsOptions))
 app.use(express.json())
@@ -44,6 +48,8 @@ app.use('/api/polls', pollRoutes)
 app.use('/api/polls/:pollId/slides', pollSlideRoutes)
 app.use('/api/public/polls', publicPollRoutes)
 app.use('/api/upload', uploadRoutes)
+app.use('/api/email-blasts', emailBlastRoutes)
+app.use('/api/gallery', galleryRoutes)
 
 app.get('/health', (_req, res) => {
   res.json({
