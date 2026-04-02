@@ -126,8 +126,11 @@ router.post('/:pollId/slides/:slideId/vote', async (req, res) => {
   const correctAnswer = settings.correctAnswer as string | undefined
   const correctAnswers = settings.correctAnswers as string[] | undefined
   const correctNumber = settings.correctNumber as number | undefined
+  const correctArea = settings.correctArea as { x: number; y: number; width: number; height: number } | undefined
   const quizTypes = ['multiple_choice', 'word_cloud', 'guess_number']
-  const isQuizSlide = quizTypes.includes(slide.type) && !!(correctAnswer || (correctAnswers && correctAnswers.length > 0) || correctNumber !== undefined)
+  const isQuizSlide =
+    (quizTypes.includes(slide.type) && !!(correctAnswer || (correctAnswers && correctAnswers.length > 0) || correctNumber !== undefined)) ||
+    (slide.type === 'pin_on_image' && !!correctArea)
 
   if (isQuizSlide) {
     let isCorrect = false
@@ -138,6 +141,15 @@ router.post('/:pollId/slides/:slideId/vote', async (req, res) => {
       isCorrect = correctAnswers.some(a => a.trim().toLowerCase() === submitted)
     } else if (slide.type === 'guess_number' && correctNumber !== undefined) {
       isCorrect = Number((value as { value?: number }).value) === correctNumber
+    } else if (slide.type === 'pin_on_image' && correctArea) {
+      const pin = value as { x?: number; y?: number }
+      const px = pin.x ?? 0
+      const py = pin.y ?? 0
+      isCorrect =
+        px >= correctArea.x &&
+        px <= correctArea.x + correctArea.width &&
+        py >= correctArea.y &&
+        py <= correctArea.y + correctArea.height
     }
 
     let points = 0
@@ -160,6 +172,18 @@ router.post('/:pollId/slides/:slideId/vote', async (req, res) => {
         priorVotes = await prisma.pollVote.count({
           where: { slideId, createdAt: { lt: vote.createdAt }, value: { path: ['value'], equals: correctNumber } },
         })
+      } else if (slide.type === 'pin_on_image' && correctArea) {
+        const prior = await prisma.pollVote.findMany({
+          where: { slideId, createdAt: { lt: vote.createdAt } },
+          select: { value: true },
+        })
+        priorVotes = prior.filter(v => {
+          const p = v.value as { x?: number; y?: number }
+          const px = p.x ?? 0
+          const py = p.y ?? 0
+          return px >= correctArea!.x && px <= correctArea!.x + correctArea!.width &&
+                 py >= correctArea!.y && py <= correctArea!.y + correctArea!.height
+        }).length
       }
       points = Math.max(100, 1000 - priorVotes * 100)
       addScore(pollId, participantId, points)
