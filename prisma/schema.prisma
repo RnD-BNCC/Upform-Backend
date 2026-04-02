@@ -155,3 +155,31 @@ model PollVote {
 
   @@unique([slideId, participantId])
 }
+
+model EmailBlast {
+  id          String     @id @default(uuid())
+  subject     String
+  html        String
+  recipients  String[]
+  status      String     @default("queued")
+  sentCount   Int        @default(0)
+  failedCount Int        @default(0)
+  totalCount  Int
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  logs        EmailLog[]
+}
+
+model EmailLog {
+  id        String     @id @default(uuid())
+  blastId   String
+  blast     EmailBlast @relation(fields: [blastId], references: [id], onDelete: Cascade)
+  recipient String
+  status    String
+  error     String?
+  attempt   Int        @default(1)
+  sentAt    DateTime?
+  createdAt DateTime   @default(now())
+
+  @@unique([blastId, recipient])
+}
