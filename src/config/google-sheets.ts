@@ -2,22 +2,15 @@ import { google } from 'googleapis'
 
 type SheetField = { id: string; label: string }
 
-function getAuth() {
-  const email = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL
-  const key = process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY?.replace(/\\n/g, '\n')
-
-  if (!email || !key) {
-    throw new Error('Missing GOOGLE_SERVICE_ACCOUNT_EMAIL or GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY env vars')
-  }
-
-  return new google.auth.JWT({
-    email,
-    key,
-    scopes: ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive'],
-  })
+function getAuth(refreshToken: string) {
+  const client = new google.auth.OAuth2(
+    process.env.GOOGLE_CLIENT_ID,
+    process.env.GOOGLE_CLIENT_SECRET,
+  )
+  client.setCredentials({ refresh_token: refreshToken })
+  return client
 }
 
-// 0-based index → column letter (0→A, 26→AA)
 function colToLetter(index: number): string {
   let result = ''
   let n = index
@@ -28,10 +21,9 @@ function colToLetter(index: number): string {
   return result
 }
 
-export async function createSpreadsheet(title: string, fields: SheetField[]) {
-  const auth = getAuth()
+export async function createSpreadsheet(refreshToken: string, title: string, fields: SheetField[]) {
+  const auth = getAuth(refreshToken)
   const sheets = google.sheets({ version: 'v4', auth })
-  const drive = google.drive({ version: 'v3', auth })
 
   const headerValues = ['Submitted At', ...fields.map((f) => f.label || f.id)]
 
@@ -62,24 +54,47 @@ export async function createSpreadsheet(title: string, fields: SheetField[]) {
 
   const spreadsheetId = response.data.spreadsheetId!
 
-  await drive.permissions.create({
-    fileId: spreadsheetId,
-    requestBody: { role: 'reader', type: 'anyone' },
-  })
-
   return {
     spreadsheetId,
     spreadsheetUrl: `https://docs.google.com/spreadsheets/d/${spreadsheetId}`,
   }
 }
 
+export async function appendAllRows(
+  refreshToken: string,
+  spreadsheetId: string,
+  fields: SheetField[],
+  responses: Array<{ answers: Record<string, string | string[]>; submittedAt: string }>,
+) {
+  if (responses.length === 0) return
+
+  const auth = getAuth(refreshToken)
+  const sheets = google.sheets({ version: 'v4', auth })
+
+  const rows = responses.map((r) => [
+    r.submittedAt,
+    ...fields.map((f) => {
+      const val = r.answers[f.id]
+      return Array.isArray(val) ? val.join(', ') : (val ?? '')
+    }),
+  ])
+
+  await sheets.spreadsheets.values.append({
+    spreadsheetId,
+    range: 'Responses!A:Z',
+    valueInputOption: 'RAW',
+    requestBody: { values: rows },
+  })
+}
+
 export async function syncAndAppendRow(
+  refreshToken: string,
   spreadsheetId: string,
   fields: SheetField[],
   answers: Record<string, string | string[]>,
   submittedAt: string,
 ) {
-  const auth = getAuth()
+  const auth = getAuth(refreshToken)
   const sheets = google.sheets({ version: 'v4', auth })
 
   const headerRes = await sheets.spreadsheets.values.get({

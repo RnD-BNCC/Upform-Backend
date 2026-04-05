@@ -103,13 +103,13 @@ router.post('/', async (req, res) => {
 
   res.status(201).json(response)
 
-  // Fire-and-forget: sync headers + append row to Google Sheet if connected
-  if (event.spreadsheetId) {
+  if (event.spreadsheetId && event.spreadsheetToken) {
     const allFields = event.sections.flatMap((s) => {
       const fields = s.fields as Array<{ id: string; label: string; type: string }>
       return fields.filter((f) => f.type !== 'title_block' && f.type !== 'image_block')
     })
     syncAndAppendRow(
+      event.spreadsheetToken,
       event.spreadsheetId,
       allFields,
       answers as Record<string, string | string[]>,

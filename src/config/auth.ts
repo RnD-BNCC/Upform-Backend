@@ -11,6 +11,14 @@ export const auth = betterAuth({
     google: {
       clientId: process.env.GOOGLE_CLIENT_ID!,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
+      accessType: "offline",
+      prompt: "select_account consent",
+      scope: [
+        "openid",
+        "profile",
+        "email",
+        "https://www.googleapis.com/auth/spreadsheets",
+      ],
     },
   },
   trustedOrigins: (process.env.ALLOWED_ORIGINS ?? 'http://localhost:5173')
