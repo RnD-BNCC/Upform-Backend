@@ -1,5 +1,11 @@
 import { Router } from 'express'
-import { prisma } from '../config/prisma.js'
+import {
+  createEvent,
+  deleteEvent,
+  getEvent,
+  listEvents,
+  updateEvent,
+} from '../controllers/events.controller.js'
 import { requireAuth } from '../middlewares/auth.js'
 
 const router = Router()
@@ -79,55 +85,7 @@ router.use(requireAuth)
  *             schema:
  *               $ref: '#/components/schemas/Error'
  */
-router.get('/', async (req, res) => {
-  const page = Math.max(1, parseInt(req.query.page as string) || 1)
-  const take = Math.min(50, Math.max(1, parseInt(req.query.take as string) || 9))
-  const skip = (page - 1) * take
-  const status = req.query.status as string | undefined
-  const search = req.query.search as string | undefined
-
-  const where: Record<string, unknown> = {}
-  if (status && ['draft', 'active', 'closed'].includes(status)) {
-    where.status = status
-  }
-  if (search) {
-    where.name = { contains: search, mode: 'insensitive' }
-  }
-
-  const [events, total, allEvents] = await Promise.all([
-    prisma.event.findMany({
-      where,
-      include: {
-        sections: { orderBy: { order: 'asc' } },
-        _count: { select: { responses: true } },
-      },
-      orderBy: { updatedAt: 'desc' },
-      skip,
-      take,
-    }),
-    prisma.event.count({ where }),
-    prisma.event.findMany({
-      select: { status: true, _count: { select: { responses: true } } },
-    }),
-  ])
-
-  const data = events.map(({ _count, ...event }) => ({
-    ...event,
-    responseCount: _count.responses,
-  }))
-
-  const counts = {
-    total: allEvents.length,
-    active: allEvents.filter((e) => e.status === 'active').length,
-    totalResponses: allEvents.reduce((sum, e) => sum + e._count.responses, 0),
-  }
-
-  res.json({
-    data,
-    meta: { page, take, total, totalPages: Math.ceil(total / take) },
-    counts,
-  })
-})
+router.get('/', listEvents)
 
 /**
  * @swagger
@@ -158,22 +116,7 @@ router.get('/', async (req, res) => {
  *             schema:
  *               $ref: '#/components/schemas/Error'
  */
-router.get('/:id', async (req, res) => {
-  const event = await prisma.event.findUnique({
-    where: { id: req.params.id },
-    include: {
-      sections: { orderBy: { order: 'asc' } },
-      responses: { orderBy: { submittedAt: 'desc' } },
-    },
-  })
-
-  if (!event) {
-    res.status(404).json({ error: 'Event not found' })
-    return
-  }
-
-  res.json(event)
-})
+router.get('/:id', getEvent)
 
 /**
  * @swagger
@@ -196,25 +139,7 @@ router.get('/:id', async (req, res) => {
  *             schema:
  *               $ref: '#/components/schemas/Event'
  */
-router.post('/', async (req, res) => {
-  const { name, description, color } = req.body
-
-  const event = await prisma.event.create({
-    data: {
-      name: name ?? '',
-      description: description ?? '',
-      color: color ?? '#0054a5',
-      sections: {
-        create: { title: 'Section 1', order: 0, fields: [] },
-      },
-    },
-    include: {
-      sections: { orderBy: { order: 'asc' } },
-    },
-  })
-
-  res.status(201).json(event)
-})
+router.post('/', createEvent)
 
 /**
  * @swagger
@@ -246,34 +171,7 @@ router.post('/', async (req, res) => {
  *       404:
  *         description: Not found
  */
-router.patch('/:id', async (req, res) => {
-  const { name, description, status, color, image } = req.body
-
-  const existing = await prisma.event.findUnique({
-    where: { id: req.params.id },
-  })
-
-  if (!existing) {
-    res.status(404).json({ error: 'Event not found' })
-    return
-  }
-
-  const event = await prisma.event.update({
-    where: { id: req.params.id },
-    data: {
-      ...(name !== undefined && { name }),
-      ...(description !== undefined && { description }),
-      ...(status !== undefined && { status }),
-      ...(color !== undefined && { color }),
-      ...(image !== undefined && { image }),
-    },
-    include: {
-      sections: { orderBy: { order: 'asc' } },
-    },
-  })
-
-  res.json(event)
-})
+router.patch('/:id', updateEvent)
 
 /**
  * @swagger
@@ -296,18 +194,6 @@ router.patch('/:id', async (req, res) => {
  *       404:
  *         description: Not found
  */
-router.delete('/:id', async (req, res) => {
-  const existing = await prisma.event.findUnique({
-    where: { id: req.params.id },
-  })
-
-  if (!existing) {
-    res.status(404).json({ error: 'Event not found' })
-    return
-  }
-
-  await prisma.event.delete({ where: { id: req.params.id } })
-  res.status(204).send()
-})
+router.delete('/:id', deleteEvent)
 
 export default router

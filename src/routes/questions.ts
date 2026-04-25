@@ -1,5 +1,5 @@
 import { Router } from 'express'
-import { prisma } from '../config/prisma.js'
+import { deleteQuestions, listQuestions } from '../controllers/questions.controller.js'
 
 const router = Router({ mergeParams: true })
 
@@ -48,32 +48,25 @@ const router = Router({ mergeParams: true })
  *                         items:
  *                           type: string
  */
-router.get('/', async (req: import('express').Request<{ pollId: string }>, res) => {
-  const { pollId } = req.params
+router.get('/', listQuestions)
 
-  const rawQuestions = await prisma.question.findMany({
-    where: { pollId },
-    orderBy: { createdAt: 'asc' },
-    include: { likes: { select: { userId: true } } },
-  })
-
-  const questions = rawQuestions.map(q => ({
-    id: q.id,
-    text: q.text,
-    authorName: q.authorName,
-    authorId: q.authorId,
-    likeCount: q.likeCount,
-    createdAt: q.createdAt.toISOString(),
-    likedByIds: q.likes.map(l => l.userId),
-  }))
-
-  res.json({ questions })
-})
-
-router.delete('/', async (req: import('express').Request<{ pollId: string }>, res) => {
-  const { pollId } = req.params
-  await prisma.question.deleteMany({ where: { pollId } })
-  res.json({ success: true })
-})
+/**
+ * @swagger
+ * /api/polls/{pollId}/questions:
+ *   delete:
+ *     summary: Delete all questions for a poll
+ *     tags: [Questions]
+ *     parameters:
+ *       - in: path
+ *         name: pollId
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *     responses:
+ *       204:
+ *         description: All questions deleted
+ */
+router.delete('/', deleteQuestions)
 
 export default router
