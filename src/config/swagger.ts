@@ -361,6 +361,50 @@ const options: swaggerJSDoc.Options = {
           },
         },
 
+        // ─── Event Analytics ───────────────────────────────────────────────────
+        EventAnalyticsEvent: {
+          type: 'object',
+          properties: {
+            id: { type: 'string', format: 'uuid' },
+            eventId: { type: 'string', format: 'uuid' },
+            type: {
+              type: 'string',
+              enum: ['view', 'start', 'section_view', 'finish'],
+            },
+            respondentUuid: { type: 'string', nullable: true },
+            sessionUuid: { type: 'string', nullable: true },
+            sectionHistory: { type: 'array', items: { type: 'integer' } },
+            sectionId: { type: 'string', nullable: true },
+            sectionIndex: { type: 'integer', nullable: true },
+            progressPercent: { type: 'number', nullable: true },
+            deviceType: { type: 'string', nullable: true },
+            userAgent: { type: 'string', nullable: true },
+            answers: {
+              type: 'object',
+              additionalProperties: { oneOf: [{ type: 'string' }, { type: 'array', items: { type: 'string' } }] },
+            },
+            occurredAt: { type: 'string', format: 'date-time' },
+          },
+        },
+        TrackAnalyticsBody: {
+          type: 'object',
+          properties: {
+            type: { type: 'string', enum: ['view', 'start', 'section_view', 'finish'] },
+            respondentUuid: { type: 'string' },
+            sessionUuid: { type: 'string' },
+            currentSectionId: { type: 'string', nullable: true },
+            currentSectionIndex: { type: 'integer' },
+            progressPercent: { type: 'number' },
+            sectionHistory: { type: 'array', items: { type: 'integer' } },
+            answers: {
+              type: 'object',
+              additionalProperties: { oneOf: [{ type: 'string' }, { type: 'array', items: { type: 'string' } }] },
+            },
+            deviceType: { type: 'string' },
+            userAgent: { type: 'string' },
+          },
+        },
+
         // ─── Common ─────────────────────────────────────────────────────────────
         Meta: {
           type: 'object',

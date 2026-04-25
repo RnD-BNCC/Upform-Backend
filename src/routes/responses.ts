@@ -25,6 +25,12 @@ const router = Router({ mergeParams: true })
  *         schema:
  *           type: string
  *           format: uuid
+ *       - in: query
+ *         name: includeDeleted
+ *         schema:
+ *           type: boolean
+ *           default: false
+ *         description: Include soft-deleted responses
  *     responses:
  *       200:
  *         description: List of responses
@@ -34,8 +40,18 @@ const router = Router({ mergeParams: true })
  *               type: array
  *               items:
  *                 $ref: '#/components/schemas/Response'
+ *       401:
+ *         description: Unauthorized
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
  *       404:
  *         description: Event not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
  */
 router.get('/', requireAuth, listResponses)
 

@@ -23,6 +23,12 @@ const router = Router({ mergeParams: true })
  *         schema:
  *           type: string
  *           format: uuid
+ *       - in: query
+ *         name: includeDeleted
+ *         schema:
+ *           type: boolean
+ *           default: false
+ *         description: Include soft-deleted progress records
  *     responses:
  *       200:
  *         description: List of in-progress responses, sorted by most recently updated
