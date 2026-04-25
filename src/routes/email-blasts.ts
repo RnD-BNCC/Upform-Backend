@@ -1,103 +1,277 @@
 import { Router } from 'express'
-import { prisma } from '../config/prisma.js'
+import {
+  createEmailBlast,
+  deleteEmailBlast,
+  getEmailComposerDraft,
+  getEmailBlast,
+  listEmailBlasts,
+  saveEmailComposerDraft,
+} from '../controllers/email-blasts.controller.js'
 import { requireAuth } from '../middlewares/auth.js'
-import { emailQueue } from '../queues/email.queue.js'
 
 const router = Router()
 router.use(requireAuth)
 
-router.post('/', async (req, res) => {
-  const { subject, html, recipients } = req.body as {
-    subject?: string
-    html?: string
-    recipients?: string[]
-  }
+/**
+ * @swagger
+ * /api/email-blasts/events/{eventId}/draft:
+ *   get:
+ *     summary: Get email composer draft for an event
+ *     tags: [Email Blasts]
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: eventId
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *     responses:
+ *       200:
+ *         description: Draft object (null body if none exists yet)
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/EmailComposerDraft'
+ *       404:
+ *         description: Event not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       401:
+ *         description: Unauthorized
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
+router.get('/events/:eventId/draft', getEmailComposerDraft)
 
-  if (!subject || !html || !Array.isArray(recipients) || recipients.length === 0) {
-    res.status(400).json({ error: 'subject, html, and recipients are required' })
-    return
-  }
+/**
+ * @swagger
+ * /api/email-blasts/events/{eventId}/draft:
+ *   put:
+ *     summary: Save (upsert) email composer draft for an event
+ *     tags: [Email Blasts]
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: eventId
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/SaveEmailComposerDraft'
+ *     responses:
+ *       200:
+ *         description: Saved draft
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/EmailComposerDraft'
+ *       404:
+ *         description: Event not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       401:
+ *         description: Unauthorized
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
+router.put('/events/:eventId/draft', saveEmailComposerDraft)
 
-  const unique = [...new Set(recipients.map((r) => r.trim().toLowerCase()))]
+/**
+ * @swagger
+ * /api/email-blasts:
+ *   post:
+ *     summary: Create and queue an email blast
+ *     tags: [Email Blasts]
+ *     security:
+ *       - BearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [subject, html, recipients]
+ *             properties:
+ *               eventId:
+ *                 type: string
+ *                 format: uuid
+ *                 description: Optional — links the blast to an event
+ *               subject:
+ *                 type: string
+ *                 example: Welcome to the event!
+ *               html:
+ *                 type: string
+ *                 description: Full HTML body of the email
+ *               recipients:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *                   format: email
+ *                 description: Duplicate addresses are deduplicated automatically
+ *                 example: ["alice@example.com", "bob@example.com"]
+ *     responses:
+ *       201:
+ *         description: Blast created and jobs queued
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/EmailBlastDetail'
+ *       400:
+ *         description: Missing subject / html / recipients or empty recipient list
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       404:
+ *         description: Event not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       401:
+ *         description: Unauthorized
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
+router.post('/', createEmailBlast)
 
-  const blast = await prisma.emailBlast.create({
-    data: { subject, html, recipients: unique, totalCount: unique.length },
-  })
+/**
+ * @swagger
+ * /api/email-blasts:
+ *   get:
+ *     summary: List email blasts with pagination
+ *     tags: [Email Blasts]
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *           default: 1
+ *       - in: query
+ *         name: take
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *           maximum: 100
+ *           default: 20
+ *       - in: query
+ *         name: eventId
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: Filter by event
+ *     responses:
+ *       200:
+ *         description: Paginated email blasts (summary — no html/recipients)
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/EmailBlast'
+ *                 meta:
+ *                   $ref: '#/components/schemas/Meta'
+ *       401:
+ *         description: Unauthorized
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
+router.get('/', listEmailBlasts)
 
-  const jobs = unique.map((recipient) => ({
-    name: `send:${recipient}`,
-    data: { blastId: blast.id, recipient, subject, html },
-  }))
+/**
+ * @swagger
+ * /api/email-blasts/{id}:
+ *   get:
+ *     summary: Get email blast detail including per-recipient logs
+ *     tags: [Email Blasts]
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *     responses:
+ *       200:
+ *         description: Full blast with html, recipients, and logs
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/EmailBlastDetail'
+ *       404:
+ *         description: Blast not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       401:
+ *         description: Unauthorized
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
+router.get('/:id', getEmailBlast)
 
-  await emailQueue.addBulk(jobs)
-
-  res.status(201).json(blast)
-})
-
-router.get('/', async (req, res) => {
-  const page = Math.max(1, parseInt(req.query.page as string) || 1)
-  const take = Math.min(100, Math.max(1, parseInt(req.query.take as string) || 20))
-  const skip = (page - 1) * take
-
-  const [blasts, total] = await Promise.all([
-    prisma.emailBlast.findMany({
-      orderBy: { createdAt: 'desc' },
-      skip,
-      take,
-      select: {
-        id: true,
-        subject: true,
-        status: true,
-        sentCount: true,
-        failedCount: true,
-        totalCount: true,
-        createdAt: true,
-        updatedAt: true,
-      },
-    }),
-    prisma.emailBlast.count(),
-  ])
-
-  res.json({ data: blasts, meta: { page, take, total, totalPages: Math.ceil(total / take) } })
-})
-
-router.get('/:id', async (req, res) => {
-  const blast = await prisma.emailBlast.findUnique({
-    where: { id: req.params.id },
-    include: {
-      logs: {
-        orderBy: { createdAt: 'desc' },
-      },
-    },
-  })
-
-  if (!blast) {
-    res.status(404).json({ error: 'Blast not found' })
-    return
-  }
-
-  res.json(blast)
-})
-
-router.delete('/:id', async (req, res) => {
-  const blast = await prisma.emailBlast.findUnique({ where: { id: req.params.id } })
-
-  if (!blast) {
-    res.status(404).json({ error: 'Blast not found' })
-    return
-  }
-
-  const waiting = await emailQueue.getWaiting()
-  const delayed = await emailQueue.getDelayed()
-  const toRemove = [...waiting, ...delayed].filter((j) => j.data.blastId === blast.id)
-  await Promise.all(toRemove.map((j) => j.remove()))
-
-  await prisma.emailBlast.update({
-    where: { id: blast.id },
-    data: { status: 'cancelled' },
-  })
-
-  res.status(204).send()
-})
+/**
+ * @swagger
+ * /api/email-blasts/{id}:
+ *   delete:
+ *     summary: Cancel a blast — removes queued jobs and marks status as cancelled
+ *     tags: [Email Blasts]
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *     responses:
+ *       204:
+ *         description: Cancelled
+ *       404:
+ *         description: Blast not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       401:
+ *         description: Unauthorized
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
+router.delete('/:id', deleteEmailBlast)
 
 export default router

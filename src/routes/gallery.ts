@@ -1,182 +1,191 @@
 import { Router } from 'express'
-import { DeleteObjectCommand, ListObjectsV2Command } from '@aws-sdk/client-s3'
-import { prisma } from '../config/prisma.js'
+import {
+  deleteGalleryFile,
+  listGalleryFiles,
+  listGalleryMedia,
+} from '../controllers/gallery.controller.js'
 import { requireAuth } from '../middlewares/auth.js'
-import { s3, S3_BUCKET } from '../config/s3.js'
 
 const router = Router()
+router.use(requireAuth)
 
-const S3_BASE_URL = `https://s3.bncc.net/${S3_BUCKET}/`
+/**
+ * @swagger
+ * /api/gallery/files:
+ *   get:
+ *     summary: List file-upload responses grouped by event
+ *     tags: [Gallery]
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *           default: 1
+ *       - in: query
+ *         name: take
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *           maximum: 50
+ *           default: 20
+ *     responses:
+ *       200:
+ *         description: Paginated events containing file-upload responses
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 totalFiles:
+ *                   type: integer
+ *                   description: Total number of uploaded files across all events
+ *                 events:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       id:
+ *                         type: string
+ *                         format: uuid
+ *                       name:
+ *                         type: string
+ *                       status:
+ *                         type: string
+ *                         enum: [draft, active, closed]
+ *                       fileCount:
+ *                         type: integer
+ *                       responses:
+ *                         type: array
+ *                         items:
+ *                           type: object
+ *                           properties:
+ *                             id:
+ *                               type: string
+ *                               format: uuid
+ *                             submittedAt:
+ *                               type: string
+ *                               format: date-time
+ *                             respondentLabel:
+ *                               type: string
+ *                               description: First text-field answer or "Anonymous"
+ *                             files:
+ *                               type: array
+ *                               items:
+ *                                 type: object
+ *                                 properties:
+ *                                   fieldId:
+ *                                     type: string
+ *                                   fieldLabel:
+ *                                     type: string
+ *                                   url:
+ *                                     type: string
+ *                                     format: uri
+ *                                   filename:
+ *                                     type: string
+ *                 meta:
+ *                   $ref: '#/components/schemas/Meta'
+ *       401:
+ *         description: Unauthorized
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
+router.get('/files', listGalleryFiles)
 
-type FileEntry = {
-  fieldId: string
-  fieldLabel: string
-  url: string
-  filename: string
-}
+/**
+ * @swagger
+ * /api/gallery/media:
+ *   get:
+ *     summary: List all uploaded images directly from the S3 slides/ prefix
+ *     tags: [Gallery]
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *           default: 1
+ *       - in: query
+ *         name: take
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *           maximum: 100
+ *           default: 21
+ *     responses:
+ *       200:
+ *         description: Paginated media items sorted by last modified (newest first)
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 items:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/GalleryMediaItem'
+ *                 meta:
+ *                   $ref: '#/components/schemas/Meta'
+ *       401:
+ *         description: Unauthorized
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
+router.get('/media', listGalleryMedia)
 
-type FormField = {
-  id: string
-  type: string
-  label: string
-}
-
-function extractFiles(value: unknown, fieldId: string, fieldLabel: string): FileEntry[] {
-  if (!value) return []
-  const toEntry = (v: unknown): FileEntry | null => {
-    if (typeof v === 'string' && v.includes('::')) {
-      const sepIdx = v.indexOf('::')
-      const filename = v.slice(0, sepIdx)
-      const url = v.slice(sepIdx + 2)
-      return { fieldId, fieldLabel, url, filename }
-    }
-    if (typeof v === 'string' && v.startsWith('http')) {
-      const parts = v.split('/')
-      return { fieldId, fieldLabel, url: v, filename: decodeURIComponent(parts[parts.length - 1]) }
-    }
-    if (typeof v === 'object' && v !== null && 'url' in v) {
-      const obj = v as Record<string, unknown>
-      const url = String(obj.url)
-      const filename = typeof obj.filename === 'string' ? obj.filename : decodeURIComponent(url.split('/').pop() ?? '')
-      return { fieldId, fieldLabel, url, filename }
-    }
-    return null
-  }
-  if (Array.isArray(value)) {
-    return value.map(toEntry).filter(Boolean) as FileEntry[]
-  }
-  const entry = toEntry(value)
-  return entry ? [entry] : []
-}
-
-const TEXT_TYPES = new Set(['text', 'short_text', 'email', 'short_answer', 'name', 'paragraph'])
-
-function extractRespondentLabel(answers: Record<string, unknown>, fields: FormField[]): string {
-  for (const field of fields) {
-    if (TEXT_TYPES.has(field.type)) {
-      const val = answers[field.id]
-      if (typeof val === 'string' && val.trim()) return val.trim()
-    }
-  }
-  return 'Anonymous'
-}
-
-// GET /api/gallery/files
-router.get('/files', requireAuth, async (req, res) => {
-  const page = Math.max(1, parseInt(req.query.page as string) || 1)
-  const take = Math.min(50, Math.max(1, parseInt(req.query.take as string) || 20))
-  const skip = (page - 1) * take
-
-  const events = await prisma.event.findMany({
-    include: {
-      sections: { orderBy: { order: 'asc' } },
-      responses: { orderBy: { submittedAt: 'desc' } },
-    },
-    orderBy: { createdAt: 'desc' },
-  })
-
-  let totalFiles = 0
-
-  const result = events
-    .map((event) => {
-      const allFields: FormField[] = event.sections.flatMap((s) => {
-        const fields = s.fields as FormField[]
-        return Array.isArray(fields) ? fields : []
-      })
-      const fileFields = allFields.filter((f) => f.type === 'file_upload')
-      if (fileFields.length === 0) return null
-
-      const responses = event.responses
-        .map((response) => {
-          const answers = (response.answers ?? {}) as Record<string, unknown>
-          const files: FileEntry[] = fileFields.flatMap((f) =>
-            extractFiles(answers[f.id], f.id, f.label)
-          )
-          if (files.length === 0) return null
-          totalFiles += files.length
-          return {
-            id: response.id,
-            submittedAt: response.submittedAt.toISOString(),
-            respondentLabel: extractRespondentLabel(answers, allFields),
-            files,
-          }
-        })
-        .filter(Boolean)
-
-      if (responses.length === 0) return null
-
-      return {
-        id: event.id,
-        name: event.name || 'Untitled Form',
-        status: event.status,
-        fileCount: responses.reduce((sum, r) => sum + r!.files.length, 0),
-        responses,
-      }
-    })
-    .filter(Boolean)
-
-  const total = result.length
-  const paginated = result.slice(skip, skip + take)
-
-  res.json({
-    totalFiles,
-    events: paginated,
-    meta: { page, take, total, totalPages: Math.ceil(total / take) },
-  })
-})
-
-// GET /api/gallery/media — list all objects under slides/ prefix directly from S3
-router.get('/media', requireAuth, async (req, res) => {
-  const page = Math.max(1, parseInt(req.query.page as string) || 1)
-  const take = Math.min(100, Math.max(1, parseInt(req.query.take as string) || 21))
-  const skip = (page - 1) * take
-
-  const items: { key: string; url: string; filename: string; size: number; lastModified: string }[] = []
-  let continuationToken: string | undefined
-
-  do {
-    const resp = await s3.send(
-      new ListObjectsV2Command({
-        Bucket: S3_BUCKET,
-        Prefix: 'slides/',
-        ContinuationToken: continuationToken,
-      }),
-    )
-    for (const obj of resp.Contents ?? []) {
-      if (!obj.Key || obj.Key.endsWith('/')) continue
-      items.push({
-        key: obj.Key,
-        url: `${S3_BASE_URL}${obj.Key}`,
-        filename: decodeURIComponent(obj.Key.split('/').pop() ?? obj.Key),
-        size: obj.Size ?? 0,
-        lastModified: obj.LastModified?.toISOString() ?? '',
-      })
-    }
-    continuationToken = resp.IsTruncated ? resp.NextContinuationToken : undefined
-  } while (continuationToken)
-
-  items.sort((a, b) => b.lastModified.localeCompare(a.lastModified))
-
-  const total = items.length
-  const paginated = items.slice(skip, skip + take)
-
-  res.json({
-    items: paginated,
-    meta: { page, take, total, totalPages: Math.ceil(total / take) },
-  })
-})
-
-// DELETE /api/gallery/file
-router.delete('/file', requireAuth, async (req, res) => {
-  const { url } = req.body as { url?: string }
-  if (!url || !url.startsWith(S3_BASE_URL)) {
-    res.status(400).json({ error: 'Invalid URL' })
-    return
-  }
-
-  const key = url.slice(S3_BASE_URL.length)
-  await s3.send(new DeleteObjectCommand({ Bucket: S3_BUCKET, Key: key }))
-  res.json({ ok: true })
-})
+/**
+ * @swagger
+ * /api/gallery/file:
+ *   delete:
+ *     summary: Delete a file from S3 by its URL
+ *     tags: [Gallery]
+ *     security:
+ *       - BearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [url]
+ *             properties:
+ *               url:
+ *                 type: string
+ *                 format: uri
+ *                 description: Full S3 URL of the file to delete
+ *                 example: https://s3.bncc.net/bucket/slides/550e8400-e29b-41d4-a716-446655440000.png
+ *     responses:
+ *       200:
+ *         description: Deleted successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 ok:
+ *                   type: boolean
+ *                   example: true
+ *       400:
+ *         description: Missing URL or URL does not belong to this bucket
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       401:
+ *         description: Unauthorized
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
+router.delete('/file', deleteGalleryFile)
 
 export default router

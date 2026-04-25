@@ -1,59 +1,54 @@
 import { Router } from 'express'
-import multer from 'multer'
-import crypto from 'crypto'
-import path from 'path'
-import { PutObjectCommand } from '@aws-sdk/client-s3'
-import { s3, S3_BUCKET } from '../../config/s3.js'
+import { imageUpload, uploadImage } from '../../controllers/upload.controller.js'
 import { requireAuth } from '../../middlewares/auth.js'
 
 const router = Router()
 
-const ALLOWED_TYPES = [
-  'image/png',
-  'image/gif',
-  'image/jpeg',
-  'image/jpg',
-  'image/svg+xml',
-  'image/webp',
-  'image/avif',
-  'image/heic',
-  'image/heif',
-]
-
-const upload = multer({
-  storage: multer.memoryStorage(),
-  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
-  fileFilter: (_req, file, cb) => {
-    if (ALLOWED_TYPES.includes(file.mimetype)) {
-      cb(null, true)
-    } else {
-      cb(new Error('Unsupported file type'))
-    }
-  },
-})
-
-router.post('/', requireAuth, upload.single('file'), async (req, res) => {
-  const file = req.file
-  if (!file) {
-    res.status(400).json({ error: 'No file provided' })
-    return
-  }
-
-  const ext = path.extname(file.originalname) || '.png'
-  const key = `slides/${crypto.randomUUID()}${ext}`
-
-  await s3.send(
-    new PutObjectCommand({
-      Bucket: S3_BUCKET,
-      Key: key,
-      Body: file.buffer,
-      ContentType: file.mimetype,
-    }),
-  )
-
-  const url = `https://s3.bncc.net/${S3_BUCKET}/${key}`
-
-  res.json({ url })
-})
+/**
+ * @swagger
+ * /api/upload:
+ *   post:
+ *     summary: Upload an image (auth required, max 5 MB)
+ *     tags: [Upload]
+ *     security:
+ *       - BearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             required: [file]
+ *             properties:
+ *               file:
+ *                 type: string
+ *                 format: binary
+ *                 description: Image file — png, jpg, gif, svg, webp, avif, heic, heif — max 5 MB
+ *     responses:
+ *       200:
+ *         description: Upload successful
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 url:
+ *                   type: string
+ *                   format: uri
+ *                   example: https://s3.bncc.net/bucket/slides/550e8400-e29b-41d4-a716-446655440000.png
+ *       400:
+ *         description: No file provided or unsupported file type
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       401:
+ *         description: Unauthorized
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
+router.post('/', requireAuth, imageUpload.single('file'), uploadImage)
 
 export default router

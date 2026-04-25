@@ -1,5 +1,11 @@
 import { Router } from 'express'
-import { prisma } from '../config/prisma.js'
+import {
+  deletePublicResponseProgress,
+  getPublicEvent,
+  savePublicResponseProgress,
+  submitPublicResponse,
+  updatePublicResponseProgress,
+} from '../controllers/public.controller.js'
 
 const router = Router()
 
@@ -9,6 +15,7 @@ const router = Router()
  *   get:
  *     summary: Get a public event for form filling (active events only, no auth)
  *     tags: [Public]
+ *     security: []
  *     parameters:
  *       - in: path
  *         name: id
@@ -18,36 +25,27 @@ const router = Router()
  *           format: uuid
  *     responses:
  *       200:
- *         description: Public event detail with sections
+ *         description: Public event with sections (status must be active)
  *         content:
  *           application/json:
  *             schema:
  *               $ref: '#/components/schemas/Event'
  *       404:
  *         description: Form not found or not accepting responses
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
  */
-router.get('/events/:id', async (req, res) => {
-  const event = await prisma.event.findFirst({
-    where: { id: req.params.id, status: 'active' },
-    include: {
-      sections: { orderBy: { order: 'asc' } },
-    },
-  })
-
-  if (!event) {
-    res.status(404).json({ error: 'Form not found or not accepting responses' })
-    return
-  }
-
-  res.json(event)
-})
+router.get('/events/:id', getPublicEvent)
 
 /**
  * @swagger
  * /api/public/events/{id}/responses:
  *   post:
- *     summary: Submit a form response (public — no auth required)
+ *     summary: Submit a completed form response (no auth required)
  *     tags: [Public]
+ *     security: []
  *     parameters:
  *       - in: path
  *         name: id
@@ -63,33 +61,131 @@ router.get('/events/:id', async (req, res) => {
  *             $ref: '#/components/schemas/SubmitResponse'
  *     responses:
  *       201:
- *         description: Submitted response
+ *         description: Response submitted. Cleans up any matching in-progress record.
  *         content:
  *           application/json:
  *             schema:
  *               $ref: '#/components/schemas/Response'
  *       404:
  *         description: Event not found or not active
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
  */
-router.post('/events/:id/responses', async (req, res) => {
-  const { answers } = req.body
+router.post('/events/:id/responses', submitPublicResponse)
 
-  const event = await prisma.event.findFirst({
-    where: { id: req.params.id, status: 'active' },
-  })
-  if (!event) {
-    res.status(404).json({ error: 'Event not found or not active' })
-    return
-  }
+/**
+ * @swagger
+ * /api/public/events/{id}/response-progress:
+ *   post:
+ *     summary: Save in-progress form answers (no auth, upsert by respondentUuid)
+ *     description: |
+ *       Creates a new progress record, or updates the existing one if a record with the same
+ *       respondentUuid already exists for this event.
+ *     tags: [Public]
+ *     security: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/SaveResponseProgressBody'
+ *     responses:
+ *       200:
+ *         description: Existing record updated (same respondentUuid found)
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ResponseProgress'
+ *       201:
+ *         description: New progress record created
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ResponseProgress'
+ *       404:
+ *         description: Event not found or not active
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
+router.post('/events/:id/response-progress', savePublicResponseProgress)
 
-  const response = await prisma.response.create({
-    data: {
-      eventId: req.params.id,
-      answers: answers ?? {},
-    },
-  })
+/**
+ * @swagger
+ * /api/public/events/{id}/response-progress/{progressId}:
+ *   patch:
+ *     summary: Update a saved in-progress response by ID (no auth)
+ *     tags: [Public]
+ *     security: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *       - in: path
+ *         name: progressId
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/SaveResponseProgressBody'
+ *     responses:
+ *       200:
+ *         description: Updated
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ResponseProgress'
+ *       404:
+ *         description: Event not active or progress record not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
+router.patch('/events/:id/response-progress/:progressId', updatePublicResponseProgress)
 
-  res.status(201).json(response)
-})
+/**
+ * @swagger
+ * /api/public/events/{id}/response-progress/{progressId}:
+ *   delete:
+ *     summary: Delete a saved in-progress response (no auth)
+ *     tags: [Public]
+ *     security: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *       - in: path
+ *         name: progressId
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *     responses:
+ *       204:
+ *         description: Deleted
+ */
+router.delete('/events/:id/response-progress/:progressId', deletePublicResponseProgress)
 
 export default router

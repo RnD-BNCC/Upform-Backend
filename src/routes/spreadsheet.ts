@@ -1,93 +1,100 @@
 import { Router } from 'express'
-import { prisma } from '../config/prisma.js'
+import {
+  createEventSpreadsheet,
+  deleteEventSpreadsheet,
+} from '../controllers/spreadsheet.controller.js'
 import { requireAuth } from '../middlewares/auth.js'
-import type { AuthUser } from '../middlewares/auth.js'
-import { createSpreadsheet, appendAllRows } from '../config/google-sheets.js'
 
 const router = Router({ mergeParams: true })
 router.use(requireAuth)
 
-router.post('/', async (req, res) => {
-  const user = res.locals.user as AuthUser
-  const { eventId } = req.params as Record<string, string>
+/**
+ * @swagger
+ * /api/events/{eventId}/spreadsheet:
+ *   post:
+ *     summary: Create a Google Sheets spreadsheet for an event and backfill existing responses
+ *     description: |
+ *       Creates a new spreadsheet linked to the event via the authenticated user's Google OAuth token.
+ *       If the event already has a spreadsheet linked, returns the existing IDs without creating a new one.
+ *       Requires the user to have logged in with Google (refresh token must be present).
+ *     tags: [Spreadsheet]
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: eventId
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *     responses:
+ *       200:
+ *         description: Spreadsheet created (or already existed)
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 spreadsheetId:
+ *                   type: string
+ *                   example: 1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgVE2upms
+ *                 spreadsheetUrl:
+ *                   type: string
+ *                   format: uri
+ *                   example: https://docs.google.com/spreadsheets/d/1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgVE2upms/edit
+ *       400:
+ *         description: User does not have a Google refresh token — must re-login with Google
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       401:
+ *         description: Unauthorized
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       404:
+ *         description: Event not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
+router.post('/', createEventSpreadsheet)
 
-  const account = await prisma.account.findFirst({
-    where: { userId: user.id, providerId: 'google' },
-    select: { refreshToken: true },
-  })
-
-  if (!account?.refreshToken) {
-    res.status(400).json({ error: 'Missing Google Sheets permission. Please re-login.' })
-    return
-  }
-
-  const event = await prisma.event.findUnique({
-    where: { id: eventId },
-    include: { sections: { orderBy: { order: 'asc' } } },
-  })
-
-  if (!event) {
-    res.status(404).json({ error: 'Event not found' })
-    return
-  }
-
-  if (event.spreadsheetId && event.spreadsheetUrl) {
-    res.json({ spreadsheetId: event.spreadsheetId, spreadsheetUrl: event.spreadsheetUrl })
-    return
-  }
-
-  const allFields = event.sections.flatMap((s) => {
-    const fields = s.fields as Array<{ id: string; label: string; type: string }>
-    return fields.filter((f) => f.type !== 'title_block' && f.type !== 'image_block')
-  })
-
-  const { spreadsheetId, spreadsheetUrl } = await createSpreadsheet(
-    account.refreshToken,
-    event.name || 'UpForm Responses',
-    allFields,
-  )
-
-  await prisma.event.update({
-    where: { id: eventId },
-    data: { spreadsheetId, spreadsheetUrl, spreadsheetToken: account.refreshToken },
-  })
-
-  const existing = await prisma.response.findMany({
-    where: { eventId },
-    orderBy: { submittedAt: 'asc' },
-    select: { answers: true, submittedAt: true },
-  })
-
-  if (existing.length > 0) {
-    appendAllRows(
-      account.refreshToken,
-      spreadsheetId,
-      allFields,
-      existing.map((r) => ({
-        answers: r.answers as Record<string, string | string[]>,
-        submittedAt: r.submittedAt.toISOString(),
-      })),
-    ).catch((err) => console.error('[spreadsheet backfill]', err))
-  }
-
-  res.json({ spreadsheetId, spreadsheetUrl })
-})
-
-router.delete('/', async (req, res) => {
-  const { eventId } = req.params as Record<string, string>
-
-  const event = await prisma.event.findUnique({ where: { id: eventId } })
-  if (!event) {
-    res.status(404).json({ error: 'Event not found' })
-    return
-  }
-
-  await prisma.event.update({
-    where: { id: eventId },
-    data: { spreadsheetId: null, spreadsheetUrl: null, spreadsheetToken: null },
-  })
-
-  res.status(204).send()
-})
+/**
+ * @swagger
+ * /api/events/{eventId}/spreadsheet:
+ *   delete:
+ *     summary: Unlink the Google Sheets spreadsheet from an event
+ *     description: Clears spreadsheetId, spreadsheetUrl, and spreadsheetToken from the event. Does not delete the actual Google Sheets document.
+ *     tags: [Spreadsheet]
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: eventId
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *     responses:
+ *       204:
+ *         description: Unlinked successfully
+ *       401:
+ *         description: Unauthorized
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       404:
+ *         description: Event not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
+router.delete('/', deleteEventSpreadsheet)
 
 export default router
