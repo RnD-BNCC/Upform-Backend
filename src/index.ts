@@ -10,6 +10,7 @@ import { initSocket } from './config/socket.js'
 import eventRoutes from './routes/events.js'
 import sectionRoutes from './routes/sections.js'
 import responseRoutes from './routes/responses.js'
+import responseProgressRoutes from './routes/response-progress.js'
 import publicRoutes from './routes/public.js'
 import pollRoutes from './routes/polls.js'
 import pollSlideRoutes from './routes/poll-slides.js'
@@ -41,6 +42,7 @@ app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec))
 app.use('/api/events', eventRoutes)
 app.use('/api/events/:eventId/sections', sectionRoutes)
 app.use('/api/events/:eventId/responses', responseRoutes)
+app.use('/api/events/:eventId/response-progress', responseProgressRoutes)
 app.use('/api/events/:eventId/spreadsheet', spreadsheetRoutes)
 app.use('/api/public', publicRoutes)
 app.use('/api/polls/:pollId/questions', questionRoutes)
