@@ -71,6 +71,7 @@ model Event {
   sections         Section[]
   responses       Response[]
   responseProgresses ResponseProgress[]
+  analyticsEvents EventAnalyticsEvent[]
   emailComposerDraft EmailComposerDraft?
   emailBlasts     EmailBlast[]
   createdAt       DateTime   @default(now())
@@ -109,6 +110,7 @@ model Response {
   eventId             String
   event               Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
   submittedAt         DateTime @default(now())
+  deletedAt           DateTime?
 }
 
 model ResponseProgress {
@@ -126,9 +128,31 @@ model ResponseProgress {
   progressPercent     Float?
   eventId             String
   event               Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  deletedAt           DateTime?
 
   @@index([eventId])
   @@index([eventId, respondentUuid])
+}
+
+model EventAnalyticsEvent {
+  id                  String   @id @default(uuid())
+  type                String
+  answers             Json     @default("{}")
+  respondentUuid      String?
+  sessionUuid         String?
+  sectionHistory      Json     @default("[]")
+  sectionId           String?
+  sectionIndex        Int?
+  progressPercent     Float?
+  deviceType          String?
+  userAgent           String?
+  eventId             String
+  event               Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  occurredAt          DateTime @default(now())
+
+  @@index([eventId, type, occurredAt])
+  @@index([eventId, respondentUuid])
+  @@index([eventId, sessionUuid])
 }
 
 model Poll {
