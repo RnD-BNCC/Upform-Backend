@@ -19,8 +19,9 @@ export async function listResponses(
       return
     }
 
+    const includeDeleted = req.query.includeDeleted === 'true'
     const responses = await prisma.response.findMany({
-      where: { eventId },
+      where: { eventId, ...(includeDeleted ? {} : { deletedAt: null }) },
       orderBy: { submittedAt: 'desc' },
     })
 
@@ -121,7 +122,7 @@ export async function getResponse(req: Request<ResponseParams>, res: Response) {
     }
 
     const response = await prisma.response.findFirst({
-      where: { id: responseId, eventId },
+      where: { id: responseId, eventId, deletedAt: null },
     })
     if (!response) {
       res.status(404).json({ error: 'Response not found' })
@@ -143,7 +144,7 @@ export async function updateResponse(
     const { answers } = req.body
 
     const existing = await prisma.response.findFirst({
-      where: { id: responseId, eventId },
+      where: { id: responseId, eventId, deletedAt: null },
     })
     if (!existing) {
       res.status(404).json({ error: 'Response not found' })
@@ -172,14 +173,17 @@ export async function deleteResponse(req: Request<ResponseParams>, res: Response
     }
 
     const existing = await prisma.response.findFirst({
-      where: { id: responseId, eventId },
+      where: { id: responseId, eventId, deletedAt: null },
     })
     if (!existing) {
       res.status(404).json({ error: 'Response not found' })
       return
     }
 
-    await prisma.response.delete({ where: { id: responseId } })
+    await prisma.response.update({
+      where: { id: responseId },
+      data: { deletedAt: new Date() },
+    })
     res.status(204).send()
   } catch (error) {
     handleControllerError('Responses', 'delete response failed', error, res)

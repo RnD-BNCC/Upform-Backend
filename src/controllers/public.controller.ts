@@ -131,6 +131,7 @@ export async function savePublicResponseProgress(
     const existing = progressData.respondentUuid
       ? await prisma.responseProgress.findFirst({
           where: {
+            deletedAt: null,
             eventId: req.params.id,
             respondentUuid: progressData.respondentUuid,
           },
@@ -169,7 +170,7 @@ export async function updatePublicResponseProgress(
     }
 
     const existing = await prisma.responseProgress.findFirst({
-      where: { id: req.params.progressId, eventId: req.params.id },
+      where: { id: req.params.progressId, eventId: req.params.id, deletedAt: null },
     })
     if (!existing) {
       res.status(404).json({ error: 'Response progress not found' })

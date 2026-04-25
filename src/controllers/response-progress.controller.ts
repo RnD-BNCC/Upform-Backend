@@ -37,8 +37,9 @@ export async function listResponseProgress(
       return
     }
 
+    const includeDeleted = req.query.includeDeleted === 'true'
     const progress = await prisma.responseProgress.findMany({
-      where: { eventId },
+      where: { eventId, ...(includeDeleted ? {} : { deletedAt: null }) },
       orderBy: { updatedAt: 'desc' },
     })
 
@@ -56,7 +57,7 @@ export async function updateResponseProgress(
     const { eventId, progressId } = req.params
 
     const existing = await prisma.responseProgress.findFirst({
-      where: { id: progressId, eventId },
+      where: { id: progressId, eventId, deletedAt: null },
     })
     if (!existing) {
       res.status(404).json({ error: 'Response progress not found' })
@@ -81,8 +82,9 @@ export async function deleteResponseProgress(
   try {
     const { eventId, progressId } = req.params
 
-    await prisma.responseProgress.deleteMany({
-      where: { id: progressId, eventId },
+    await prisma.responseProgress.updateMany({
+      where: { id: progressId, eventId, deletedAt: null },
+      data: { deletedAt: new Date() },
     })
 
     res.status(204).send()
