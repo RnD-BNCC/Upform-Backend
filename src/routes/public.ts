@@ -6,6 +6,7 @@ import {
   submitPublicResponse,
   updatePublicResponseProgress,
 } from '../controllers/public.controller.js'
+import { trackPublicEventAnalytics } from '../controllers/event-analytics.controller.js'
 
 const router = Router()
 
@@ -74,6 +75,42 @@ router.get('/events/:id', getPublicEvent)
  *               $ref: '#/components/schemas/Error'
  */
 router.post('/events/:id/responses', submitPublicResponse)
+
+/**
+ * @swagger
+ * /api/public/events/{id}/analytics:
+ *   post:
+ *     summary: Track an analytics event for an active form (no auth)
+ *     tags: [Public]
+ *     security: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/TrackAnalyticsBody'
+ *     responses:
+ *       201:
+ *         description: Analytics event recorded
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/EventAnalyticsEvent'
+ *       404:
+ *         description: Event not found or not active
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
+router.post('/events/:id/analytics', trackPublicEventAnalytics)
 
 /**
  * @swagger
