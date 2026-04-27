@@ -23,3 +23,17 @@ export type CreateEmailBlastBody = {
   html?: string
   recipients?: string[]
 }
+
+export type SubmitFormSettingsBody = {
+  blocks?: unknown
+  body?: string
+  emailThemeValue?: string | null
+  enabled?: boolean
+  raffleEnabled?: boolean
+  rafflePadding?: number
+  rafflePrefix?: string
+  raffleStart?: number
+  raffleSuffix?: string
+  recipientFieldId?: string
+  subject?: string
+}

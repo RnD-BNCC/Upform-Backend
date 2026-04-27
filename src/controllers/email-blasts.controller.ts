@@ -7,11 +7,45 @@ import type {
   EmailDraftParams,
   EmailDraftBody,
   CreateEmailBlastBody,
+  SubmitFormSettingsBody,
 } from '../types/email-blasts.js'
 
 function normalizeStringArray(value: unknown) {
   if (!Array.isArray(value)) return []
   return value.filter((item): item is string => typeof item === 'string')
+}
+
+function normalizeString(value: unknown) {
+  return typeof value === 'string' ? value : ''
+}
+
+function normalizeInteger(value: unknown, fallback: number, min: number, max: number) {
+  const number = typeof value === 'number' ? value : Number(value)
+  if (!Number.isFinite(number)) return fallback
+  return Math.max(min, Math.min(max, Math.round(number)))
+}
+
+function normalizeBlocks(value: unknown) {
+  return Array.isArray(value) ? value : []
+}
+
+function normalizeSubmitFormSettingsBody(body: SubmitFormSettingsBody) {
+  return {
+    blocks: normalizeBlocks(body.blocks),
+    body: normalizeString(body.body),
+    emailThemeValue:
+      typeof body.emailThemeValue === 'string' && body.emailThemeValue.trim()
+        ? body.emailThemeValue
+        : null,
+    enabled: body.enabled === true,
+    raffleEnabled: body.raffleEnabled !== false,
+    rafflePadding: normalizeInteger(body.rafflePadding, 4, 1, 10),
+    rafflePrefix: normalizeString(body.rafflePrefix),
+    raffleStart: normalizeInteger(body.raffleStart, 1, 0, 999999999),
+    raffleSuffix: normalizeString(body.raffleSuffix),
+    recipientFieldId: normalizeString(body.recipientFieldId),
+    subject: normalizeString(body.subject),
+  }
 }
 
 export async function getEmailComposerDraft(
@@ -94,6 +128,65 @@ export async function saveEmailComposerDraft(
     res.json(draft)
   } catch (error) {
     handleControllerError('Email Blasts', 'save email composer draft failed', error, res)
+  }
+}
+
+export async function getSubmitFormSettings(
+  req: Request<EmailDraftParams>,
+  res: Response,
+) {
+  try {
+    const { eventId } = req.params
+
+    const event = await prisma.event.findUnique({
+      where: { id: eventId },
+      select: { id: true },
+    })
+
+    if (!event) {
+      res.status(404).json({ error: 'Event not found' })
+      return
+    }
+
+    const settings = await prisma.submitFormSetting.findUnique({
+      where: { eventId },
+    })
+
+    res.json(settings)
+  } catch (error) {
+    handleControllerError('Email Blasts', 'get submit form settings failed', error, res)
+  }
+}
+
+export async function saveSubmitFormSettings(
+  req: Request<EmailDraftParams, unknown, SubmitFormSettingsBody>,
+  res: Response,
+) {
+  try {
+    const { eventId } = req.params
+    const event = await prisma.event.findUnique({
+      where: { id: eventId },
+      select: { id: true },
+    })
+
+    if (!event) {
+      res.status(404).json({ error: 'Event not found' })
+      return
+    }
+
+    const data = normalizeSubmitFormSettingsBody(req.body)
+    const settings = await prisma.submitFormSetting.upsert({
+      where: { eventId },
+      create: {
+        ...data,
+        eventId,
+      },
+      update: data,
+    })
+
+    res.json(settings)
+  } catch (error) {
+    handleControllerError('Email Blasts', 'save submit form settings failed', error, res)
   }
 }
 
