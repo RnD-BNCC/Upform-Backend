@@ -3,6 +3,7 @@ import { prisma } from '../config/prisma.js'
 import type { Prisma } from '../../generated/prisma/index.js'
 import { syncAndAppendRow } from '../config/google-sheets.js'
 import { handleControllerError } from '../utils/controller-error.js'
+import { sendSubmitConfirmationEmail } from '../utils/submit-form-email.js'
 import type { ResponseParams, UpdateResponseBody } from '../types/responses.js'
 import type { SubmitResponseBody } from '../types/response-progress.js'
 
@@ -52,7 +53,10 @@ export async function submitResponse(
 
     const event = await prisma.event.findFirst({
       where: { id: eventId, status: 'active' },
-      include: { sections: { orderBy: { order: 'asc' } } },
+      include: {
+        sections: { orderBy: { order: 'asc' } },
+        submitFormSetting: true,
+      },
     })
     if (!event) {
       res.status(404).json({ error: 'Event not found or not active' })
@@ -100,6 +104,10 @@ export async function submitResponse(
         response.submittedAt.toISOString(),
       ).catch((error) => console.error('[Responses] spreadsheet sync+append failed:', error))
     }
+
+    sendSubmitConfirmationEmail(event, response).catch((error) =>
+      console.error('[Responses] submit confirmation email failed:', error),
+    )
   } catch (error) {
     handleControllerError('Responses', 'submit response failed', error, res)
   }

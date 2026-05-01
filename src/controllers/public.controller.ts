@@ -1,6 +1,7 @@
 import type { Request, Response } from 'express'
 import { prisma } from '../config/prisma.js'
 import { handleControllerError } from '../utils/controller-error.js'
+import { sendSubmitConfirmationEmail } from '../utils/submit-form-email.js'
 import type {
   SaveResponseProgressBody,
   SubmitResponseBody,
@@ -76,6 +77,7 @@ export async function submitPublicResponse(
 
     const event = await prisma.event.findFirst({
       where: { id: req.params.id, status: 'active' },
+      include: { submitFormSetting: true },
     })
     if (!event) {
       res.status(404).json({ error: 'Event not found or not active' })
@@ -109,6 +111,10 @@ export async function submitPublicResponse(
     }
 
     res.status(201).json(response)
+
+    sendSubmitConfirmationEmail(event, response).catch((error) =>
+      console.error('[Public] submit confirmation email failed:', error),
+    )
   } catch (error) {
     handleControllerError('Public', 'submit public response failed', error, res)
   }

@@ -4,8 +4,10 @@ import {
   deleteEmailBlast,
   getEmailComposerDraft,
   getEmailBlast,
+  getSubmitFormSettings,
   listEmailBlasts,
   saveEmailComposerDraft,
+  saveSubmitFormSettings,
 } from '../controllers/email-blasts.controller.js'
 import { requireAuth } from '../middlewares/auth.js'
 
@@ -49,6 +51,8 @@ router.use(requireAuth)
  */
 router.get('/events/:eventId/draft', getEmailComposerDraft)
 
+router.get('/events/:eventId/submit-settings', getSubmitFormSettings)
+
 /**
  * @swagger
  * /api/email-blasts/events/{eventId}/draft:
@@ -91,6 +95,8 @@ router.get('/events/:eventId/draft', getEmailComposerDraft)
  *               $ref: '#/components/schemas/Error'
  */
 router.put('/events/:eventId/draft', saveEmailComposerDraft)
+
+router.put('/events/:eventId/submit-settings', saveSubmitFormSettings)
 
 /**
  * @swagger

@@ -74,6 +74,7 @@ model Event {
   analyticsEvents EventAnalyticsEvent[]
   emailComposerDraft EmailComposerDraft?
   emailBlasts     EmailBlast[]
+  submitFormSetting SubmitFormSetting?
   createdAt       DateTime   @default(now())
   updatedAt       DateTime   @updatedAt
 }
@@ -249,6 +250,25 @@ model EmailComposerDraft {
   excludedRecipients    String[] @default([])
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt
+}
+
+model SubmitFormSetting {
+  id               String   @id @default(uuid())
+  eventId          String   @unique
+  event            Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  enabled          Boolean  @default(false)
+  recipientFieldId String   @default("")
+  subject          String   @default("")
+  body             String   @default("")
+  blocks           Json     @default("[]")
+  emailThemeValue  String?
+  raffleEnabled    Boolean  @default(true)
+  rafflePrefix     String   @default("")
+  raffleSuffix     String   @default("")
+  raffleStart      Int      @default(1)
+  rafflePadding    Int      @default(4)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 }
 
 model EmailLog {
