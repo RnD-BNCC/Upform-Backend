@@ -63,11 +63,18 @@ model Event {
   description     String     @default("")
   status          String     @default("draft")
   color           String     @default("#0054a5")
+  theme           String     @default("light")
   image           String?
-  spreadsheetId   String?
-  spreadsheetUrl  String?
-  sections        Section[]
+  spreadsheetId    String?
+  spreadsheetUrl   String?
+  spreadsheetToken String?
+  sections         Section[]
   responses       Response[]
+  responseProgresses ResponseProgress[]
+  analyticsEvents EventAnalyticsEvent[]
+  emailComposerDraft EmailComposerDraft?
+  emailBlasts     EmailBlast[]
+  submitFormSetting SubmitFormSetting?
   createdAt       DateTime   @default(now())
   updatedAt       DateTime   @updatedAt
 }
@@ -78,6 +85,10 @@ model Section {
   description String   @default("")
   order       Int      @default(0)
   fields      Json     @default("[]")
+  settings    Json     @default("{}")
+  pageType    String   @default("page")
+  logicX      Float?
+  logicY      Float?
   eventId     String
   event       Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
   createdAt   DateTime @default(now())
@@ -85,11 +96,64 @@ model Section {
 }
 
 model Response {
-  id          String   @id @default(uuid())
-  answers     Json     @default("{}")
-  eventId     String
-  event       Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  submittedAt DateTime @default(now())
+  id                  String   @id @default(uuid())
+  answers             Json     @default("{}")
+  respondentUuid      String?
+  startedAt           DateTime?
+  completedAt         DateTime?
+  updatedAt           DateTime @default(now()) @updatedAt
+  deviceType          String?
+  userAgent           String?
+  sectionHistory      Json     @default("[]")
+  currentSectionId    String?
+  currentSectionIndex Int?
+  progressPercent     Float?
+  eventId             String
+  event               Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  submittedAt         DateTime @default(now())
+  deletedAt           DateTime?
+}
+
+model ResponseProgress {
+  id                  String   @id @default(uuid())
+  answers             Json     @default("{}")
+  otherTexts          Json     @default("{}")
+  respondentUuid      String?
+  startedAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  deviceType          String?
+  userAgent           String?
+  sectionHistory      Json     @default("[]")
+  currentSectionId    String?
+  currentSectionIndex Int?
+  progressPercent     Float?
+  eventId             String
+  event               Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  deletedAt           DateTime?
+
+  @@index([eventId])
+  @@index([eventId, respondentUuid])
+}
+
+model EventAnalyticsEvent {
+  id                  String   @id @default(uuid())
+  type                String
+  answers             Json     @default("{}")
+  respondentUuid      String?
+  sessionUuid         String?
+  sectionHistory      Json     @default("[]")
+  sectionId           String?
+  sectionIndex        Int?
+  progressPercent     Float?
+  deviceType          String?
+  userAgent           String?
+  eventId             String
+  event               Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  occurredAt          DateTime @default(now())
+
+  @@index([eventId, type, occurredAt])
+  @@index([eventId, respondentUuid])
+  @@index([eventId, sessionUuid])
 }
 
 model Poll {
@@ -154,4 +218,69 @@ model PollVote {
   createdAt     DateTime  @default(now())
 
   @@unique([slideId, participantId])
+}
+
+model EmailBlast {
+  id          String     @id @default(uuid())
+  eventId     String?
+  event       Event?     @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  subject     String
+  html        String
+  recipients  String[]
+  status      String     @default("queued")
+  sentCount   Int        @default(0)
+  failedCount Int        @default(0)
+  totalCount  Int
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  logs        EmailLog[]
+}
+
+model EmailComposerDraft {
+  id                    String   @id @default(uuid())
+  eventId               String   @unique
+  event                 Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  subject               String   @default("")
+  emailStyle            String   @default("formatted")
+  emailThemeValue       String?
+  blocks                Json     @default("[]")
+  recipientMode         String   @default("manual")
+  manualRecipients      String[] @default([])
+  selectedEmailFieldIds String[] @default([])
+  excludedRecipients    String[] @default([])
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+}
+
+model SubmitFormSetting {
+  id               String   @id @default(uuid())
+  eventId          String   @unique
+  event            Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  enabled          Boolean  @default(false)
+  recipientFieldId String   @default("")
+  subject          String   @default("")
+  body             String   @default("")
+  blocks           Json     @default("[]")
+  emailThemeValue  String?
+  raffleEnabled    Boolean  @default(true)
+  rafflePrefix     String   @default("")
+  raffleSuffix     String   @default("")
+  raffleStart      Int      @default(1)
+  rafflePadding    Int      @default(4)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+}
+
+model EmailLog {
+  id        String     @id @default(uuid())
+  blastId   String
+  blast     EmailBlast @relation(fields: [blastId], references: [id], onDelete: Cascade)
+  recipient String
+  status    String
+  error     String?
+  attempt   Int        @default(1)
+  sentAt    DateTime?
+  createdAt DateTime   @default(now())
+
+  @@unique([blastId, recipient])
 }
