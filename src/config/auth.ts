@@ -29,6 +29,7 @@ export const auth = betterAuth({
         "openid",
         "profile",
         "email",
+        "https://www.googleapis.com/auth/drive.file",
       ],
     },
   },
