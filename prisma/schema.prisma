@@ -93,11 +93,28 @@ model GalleryShare {
   driveRefreshToken String?
   driveSyncEnabled Boolean             @default(false)
   members         GalleryShareMember[]
+  driveConnections GalleryDriveConnection[]
   createdAt       DateTime             @default(now())
   updatedAt       DateTime             @updatedAt
 
   @@index([token])
   @@index([eventId])
+}
+
+model GalleryDriveConnection {
+  id           String       @id @default(uuid())
+  shareId      String
+  share        GalleryShare @relation(fields: [shareId], references: [id], onDelete: Cascade)
+  ownerEmail   String
+  refreshToken String
+  folderId     String
+  folderUrl    String
+  syncEnabled  Boolean      @default(true)
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  @@unique([shareId, ownerEmail])
+  @@index([ownerEmail])
 }
 
 model GalleryShareMember {
