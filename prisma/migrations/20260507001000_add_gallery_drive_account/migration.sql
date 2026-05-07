@@ -1,0 +1,3 @@
+ALTER TABLE "GalleryShare"
+ADD COLUMN IF NOT EXISTS "driveOwnerEmail" TEXT,
+ADD COLUMN IF NOT EXISTS "driveRefreshToken" TEXT;
