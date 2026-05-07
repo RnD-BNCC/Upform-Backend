@@ -665,7 +665,13 @@ export async function startGalleryDriveAuth(req: Request, res: Response) {
       exp: Date.now() + 10 * 60 * 1000,
     })
 
-    res.redirect(createDriveAccountAuthUrl(getDriveRedirectUri(req), state))
+    const authUrl = createDriveAccountAuthUrl(getDriveRedirectUri(req), state)
+    if (req.query.response === 'json') {
+      res.json({ authUrl })
+      return
+    }
+
+    res.redirect(authUrl)
   } catch (error) {
     handleControllerError('Gallery', 'start drive auth failed', error, res)
   }
@@ -693,8 +699,11 @@ export async function completeGalleryDriveAuth(req: Request, res: Response) {
       return
     }
 
-    const user = await getOptionalUser(req)
-    if (!user || user.id !== state.userId || !isEmailAllowed(user.email)) {
+    const user = await prisma.user.findUnique({
+      where: { id: state.userId },
+      select: { email: true },
+    })
+    if (!user || !isEmailAllowed(user.email)) {
       redirectWithStatus('unauthorized')
       return
     }
