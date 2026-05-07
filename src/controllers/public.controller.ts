@@ -2,6 +2,7 @@ import type { Request, Response } from 'express'
 import { prisma } from '../config/prisma.js'
 import { handleControllerError } from '../utils/controller-error.js'
 import { sendSubmitConfirmationEmail } from '../utils/submit-form-email.js'
+import { syncEventFilesToConnectedDrive } from '../services/gallery-drive-sync.js'
 import type {
   SaveResponseProgressBody,
   SubmitResponseBody,
@@ -114,6 +115,9 @@ export async function submitPublicResponse(
 
     sendSubmitConfirmationEmail(event, response).catch((error) =>
       console.error('[Public] submit confirmation email failed:', error),
+    )
+    syncEventFilesToConnectedDrive(req.params.id, response.id).catch((error) =>
+      console.error('[Public] gallery drive sync failed:', error),
     )
   } catch (error) {
     handleControllerError('Public', 'submit public response failed', error, res)

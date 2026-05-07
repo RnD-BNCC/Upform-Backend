@@ -4,6 +4,7 @@ import type { Prisma } from '../../generated/prisma/index.js'
 import { syncAndAppendRow } from '../config/google-sheets.js'
 import { handleControllerError } from '../utils/controller-error.js'
 import { sendSubmitConfirmationEmail } from '../utils/submit-form-email.js'
+import { syncEventFilesToConnectedDrive } from '../services/gallery-drive-sync.js'
 import type { ResponseParams, UpdateResponseBody } from '../types/responses.js'
 import type { SubmitResponseBody } from '../types/response-progress.js'
 
@@ -108,6 +109,9 @@ export async function submitResponse(
     sendSubmitConfirmationEmail(event, response).catch((error) =>
       console.error('[Responses] submit confirmation email failed:', error),
     )
+    syncEventFilesToConnectedDrive(eventId, response.id).catch((error) =>
+      console.error('[Responses] gallery drive sync failed:', error),
+    )
   } catch (error) {
     handleControllerError('Responses', 'submit response failed', error, res)
   }
@@ -165,6 +169,9 @@ export async function updateResponse(
     })
 
     res.json(response)
+    syncEventFilesToConnectedDrive(eventId, response.id).catch((error) =>
+      console.error('[Responses] gallery drive sync failed:', error),
+    )
   } catch (error) {
     handleControllerError('Responses', 'update response failed', error, res)
   }
