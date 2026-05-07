@@ -38,12 +38,22 @@ type GalleryShareRecord = {
   driveRefreshToken?: string | null
   driveSyncEnabled: boolean
   members: GalleryShareMemberRecord[]
+  driveConnections?: GalleryDriveConnectionRecord[]
 }
 
 type GalleryShareMemberRecord = {
   id: string
   email: string
   role: string
+}
+
+type GalleryDriveConnectionRecord = {
+  id: string
+  ownerEmail: string
+  folderId: string
+  folderUrl: string
+  syncEnabled: boolean
+  refreshToken?: string | null
 }
 
 type GalleryEventSource = {
@@ -58,6 +68,11 @@ type GalleryEventSource = {
   }>
   galleryShare?: GalleryShareRecord | null
 }
+
+const galleryShareInclude = {
+  members: { orderBy: { email: 'asc' } },
+  driveConnections: { orderBy: { ownerEmail: 'asc' } },
+} satisfies Prisma.GalleryShareInclude
 
 function createShareToken() {
   return randomBytes(18).toString('base64url')
@@ -124,7 +139,7 @@ function isSafeRedirectUrl(value: unknown, req: Request) {
   if (typeof value !== 'string') return false
   try {
     const url = new URL(value)
-    return url.origin === getAppOrigin(req)
+    return getAllowedAppOrigins(req).includes(url.origin)
   } catch {
     return false
   }
@@ -149,15 +164,28 @@ function normalizeEmail(value: unknown) {
 }
 
 function getAppOrigin(req: Request) {
-  const configuredOrigin = process.env.PUBLIC_APP_URL?.trim()
-  const firstAllowedOrigin = (process.env.ALLOWED_ORIGINS ?? '').split(',')[0]?.trim()
-  return (configuredOrigin || firstAllowedOrigin || `${req.protocol}://${req.get('host')}`).replace(
-    /\/$/,
-    '',
+  return getAllowedAppOrigins(req)[0]
+}
+
+function getAllowedAppOrigins(req: Request) {
+  const origins = [
+    process.env.PUBLIC_APP_URL,
+    process.env.FRONTEND_URL,
+    ...(process.env.ALLOWED_ORIGINS ?? '').split(','),
+    `${req.protocol}://${req.get('host')}`,
+  ]
+
+  return Array.from(
+    new Set(
+      origins
+        .map((origin) => origin?.trim().replace(/\/$/, ''))
+        .filter((origin): origin is string => !!origin),
+    ),
   )
 }
 
 function serializeShare(share: GalleryShareRecord, req: Request) {
+  const driveConnections = getDriveConnections(share)
   return {
     id: share.id,
     eventId: share.eventId,
@@ -168,7 +196,14 @@ function serializeShare(share: GalleryShareRecord, req: Request) {
     driveFolderId: share.driveFolderId ?? null,
     driveFolderUrl: share.driveFolderUrl ?? null,
     driveOwnerEmail: share.driveOwnerEmail ?? null,
-    driveSyncEnabled: share.driveSyncEnabled,
+    driveSyncEnabled: share.driveSyncEnabled || driveConnections.length > 0,
+    driveConnections: driveConnections.map((connection) => ({
+      id: connection.id,
+      ownerEmail: connection.ownerEmail,
+      folderId: connection.folderId,
+      folderUrl: connection.folderUrl,
+      syncEnabled: connection.syncEnabled,
+    })),
     members: share.members.map((member) => ({
       id: member.id,
       email: member.email,
@@ -179,16 +214,28 @@ function serializeShare(share: GalleryShareRecord, req: Request) {
 
 function serializeShareSummary(share: GalleryShareRecord | null | undefined, req: Request) {
   if (!share) return null
+  const driveConnections = getDriveConnections(share)
   return {
     visibility: share.visibility,
     publicRole: share.publicRole,
     token: share.token,
     shareUrl: `${getAppOrigin(req)}/gallery/share/${share.token}`,
     memberCount: share.members.length,
-    driveSyncEnabled: share.driveSyncEnabled,
-    driveFolderUrl: share.driveFolderUrl ?? null,
-    driveOwnerEmail: share.driveOwnerEmail ?? null,
+    driveSyncEnabled: share.driveSyncEnabled || driveConnections.length > 0,
+    driveFolderUrl: driveConnections[0]?.folderUrl ?? share.driveFolderUrl ?? null,
+    driveOwnerEmail: driveConnections[0]?.ownerEmail ?? share.driveOwnerEmail ?? null,
+    driveConnections: driveConnections.map((connection) => ({
+      id: connection.id,
+      ownerEmail: connection.ownerEmail,
+      folderId: connection.folderId,
+      folderUrl: connection.folderUrl,
+      syncEnabled: connection.syncEnabled,
+    })),
   }
+}
+
+function getDriveConnections(share: GalleryShareRecord) {
+  return (share.driveConnections ?? []).filter((connection) => connection.syncEnabled)
 }
 
 function extractFiles(value: unknown, fieldId: string, fieldLabel: string): FileEntry[] {
@@ -452,45 +499,91 @@ async function syncDriveForEvent(
   share: GalleryShareRecord,
   ownerEmail?: string | null,
 ) {
-  let nextShare = share
+  const normalizedOwnerEmail = normalizeEmail(ownerEmail) || normalizeEmail(share.driveOwnerEmail)
+  if (!normalizedOwnerEmail) {
+    throw new Error('Missing Google Drive account email')
+  }
+  const existingConnection = share.driveConnections?.find(
+    (connection) => normalizeEmail(connection.ownerEmail) === normalizedOwnerEmail,
+  )
+  const canReuseLegacyFolder = normalizeEmail(share.driveOwnerEmail) === normalizedOwnerEmail
+
+  let nextShare = {
+    ...share,
+    driveFolderId:
+      existingConnection?.folderId ??
+      (canReuseLegacyFolder ? share.driveFolderId : null) ??
+      null,
+    driveFolderUrl:
+      existingConnection?.folderUrl ??
+      (canReuseLegacyFolder ? share.driveFolderUrl : null) ??
+      null,
+    driveOwnerEmail: normalizedOwnerEmail,
+    driveRefreshToken: refreshToken,
+    driveSyncEnabled: true,
+  }
 
   if (!nextShare.driveFolderId || !nextShare.driveFolderUrl) {
     const folder = await createDriveFolder(
       refreshToken,
       `UpForm - ${event.name || 'Gallery Files'}`,
     )
-    nextShare = await prisma.galleryShare.update({
-      where: { eventId: event.id },
-      data: {
-        driveFolderId: folder.folderId,
-        driveFolderUrl: folder.folderUrl,
-        driveOwnerEmail: ownerEmail ?? nextShare.driveOwnerEmail ?? null,
-        driveRefreshToken: refreshToken,
-        driveSyncEnabled: true,
-      },
-      include: { members: { orderBy: { email: 'asc' } } },
-    })
-  } else {
-    nextShare = await prisma.galleryShare.update({
-      where: { eventId: event.id },
-      data: {
-        driveOwnerEmail: ownerEmail ?? nextShare.driveOwnerEmail ?? null,
-        driveRefreshToken: refreshToken,
-        driveSyncEnabled: true,
-      },
-      include: { members: { orderBy: { email: 'asc' } } },
-    })
+    nextShare = {
+      ...nextShare,
+      driveFolderId: folder.folderId,
+      driveFolderUrl: folder.folderUrl,
+    }
   }
 
   await syncShareToDrive(refreshToken, nextShare)
   if (nextShare.driveFolderId) {
     const galleryEvent = buildGalleryEvent({ ...event, galleryShare: nextShare }, req)
     if (galleryEvent) {
-      await syncEventFilesToDrive(refreshToken, nextShare.driveFolderId, galleryEvent)
+      const result = await syncEventFilesToDrive(refreshToken, nextShare.driveFolderId, galleryEvent)
+      if (result.failed > 0) {
+        throw new Error(`Failed to sync ${result.failed} gallery file(s) to Google Drive`)
+      }
     }
   }
 
-  return nextShare
+  if (!nextShare.driveFolderId || !nextShare.driveFolderUrl) {
+    throw new Error('Failed to prepare Google Drive folder')
+  }
+
+  await prisma.galleryDriveConnection.upsert({
+    where: {
+      shareId_ownerEmail: {
+        shareId: share.id,
+        ownerEmail: normalizedOwnerEmail,
+      },
+    },
+    update: {
+      refreshToken,
+      folderId: nextShare.driveFolderId,
+      folderUrl: nextShare.driveFolderUrl,
+      syncEnabled: true,
+    },
+    create: {
+      shareId: share.id,
+      ownerEmail: normalizedOwnerEmail,
+      refreshToken,
+      folderId: nextShare.driveFolderId,
+      folderUrl: nextShare.driveFolderUrl,
+      syncEnabled: true,
+    },
+  })
+
+  return prisma.galleryShare.update({
+    where: { eventId: event.id },
+    data: {
+      driveFolderId: nextShare.driveFolderId,
+      driveFolderUrl: nextShare.driveFolderUrl,
+      driveOwnerEmail: nextShare.driveOwnerEmail,
+      driveRefreshToken: refreshToken,
+      driveSyncEnabled: true,
+    },
+    include: galleryShareInclude,
+  })
 }
 
 export async function listGalleryFiles(req: Request, res: Response) {
@@ -507,7 +600,7 @@ export async function listGalleryFiles(req: Request, res: Response) {
           orderBy: { submittedAt: 'desc' },
         },
         galleryShare: {
-          include: { members: { orderBy: { email: 'asc' } } },
+          include: galleryShareInclude,
         },
       },
       orderBy: { createdAt: 'desc' },
@@ -555,7 +648,7 @@ export async function getGalleryShare(req: Request, res: Response) {
       where: { eventId },
       update: {},
       create: { eventId, token: createShareToken() },
-      include: { members: { orderBy: { email: 'asc' } } },
+      include: galleryShareInclude,
     })
 
     res.json(serializeShare(share, req))
@@ -626,17 +719,36 @@ export async function updateGalleryShare(req: Request, res: Response) {
           })),
         },
       },
-      include: { members: { orderBy: { email: 'asc' } } },
+      include: galleryShareInclude,
     })
 
-    if (share.driveSyncEnabled && share.driveFolderId) {
+    if (share.driveSyncEnabled) {
       const user = res.locals.user as AuthUser
-      const refreshToken = await getGoogleRefreshToken(user.id)
-      if (!refreshToken) {
-        res.status(400).json({ error: 'Missing Google Drive permission. Please re-login.' })
-        return
+      const connections = getDriveConnections(share)
+      let syncedShare = share
+
+      if (connections.length > 0) {
+        for (const connection of connections) {
+          if (!connection.refreshToken) continue
+          syncedShare = await syncDriveForEvent(
+            req,
+            connection.refreshToken,
+            event,
+            syncedShare,
+            connection.ownerEmail,
+          )
+        }
+      } else {
+        const refreshToken = await getGoogleRefreshToken(user.id)
+        if (!refreshToken) {
+          res.status(400).json({ error: 'Missing Google Drive permission. Please re-login.' })
+          return
+        }
+        syncedShare = await syncDriveForEvent(req, refreshToken, event, share, user.email)
       }
-      await syncDriveForEvent(req, share.driveRefreshToken ?? refreshToken, event, share)
+
+      res.json(serializeShare(syncedShare, req))
+      return
     }
 
     res.json(serializeShare(share, req))
@@ -733,7 +845,7 @@ export async function completeGalleryDriveAuth(req: Request, res: Response) {
       where: { eventId: state.eventId },
       update: {},
       create: { eventId: state.eventId, token: createShareToken() },
-      include: { members: { orderBy: { email: 'asc' } } },
+      include: galleryShareInclude,
     })
 
     await syncDriveForEvent(
@@ -775,12 +887,12 @@ export async function connectGalleryDrive(req: Request, res: Response) {
       where: { eventId },
       update: {},
       create: { eventId, token: createShareToken() },
-      include: { members: { orderBy: { email: 'asc' } } },
+      include: galleryShareInclude,
     })
 
-    const refreshToken = existingShare.driveRefreshToken ?? (await getGoogleRefreshToken(user.id))
+    const refreshToken = await getGoogleRefreshToken(user.id)
     if (!refreshToken) {
-      res.status(400).json({ error: 'Missing Google Drive permission. Please choose a Drive account.' })
+      res.status(400).json({ error: 'Missing Google Drive permission. Please re-login.' })
       return
     }
 
@@ -789,7 +901,7 @@ export async function connectGalleryDrive(req: Request, res: Response) {
       refreshToken,
       event,
       existingShare,
-      existingShare.driveOwnerEmail ?? user.email,
+      user.email,
     )
     res.json(serializeShare(share, req))
   } catch (error) {
@@ -804,6 +916,7 @@ export async function getSharedGalleryFiles(req: Request, res: Response) {
       where: { token },
       include: {
         members: { orderBy: { email: 'asc' } },
+        driveConnections: { orderBy: { ownerEmail: 'asc' } },
         event: {
           include: {
             sections: { orderBy: { order: 'asc' } },
