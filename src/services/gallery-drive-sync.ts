@@ -68,8 +68,30 @@ function extractRespondentLabel(answers: Record<string, unknown>, fields: FormFi
 }
 
 export async function syncEventFilesToConnectedDrive(eventId: string, responseId?: string) {
-  const share = await prisma.galleryShare.findUnique({ where: { eventId } })
-  if (!share?.driveSyncEnabled || !share.driveFolderId || !share.driveRefreshToken) {
+  const share = await prisma.galleryShare.findUnique({
+    where: { eventId },
+    include: {
+      driveConnections: {
+        where: { syncEnabled: true },
+        orderBy: { ownerEmail: 'asc' },
+      },
+    },
+  })
+  if (!share?.driveSyncEnabled) {
+    return { uploaded: 0, skipped: 0, failed: 0 }
+  }
+
+  const driveTargets =
+    share.driveConnections.length > 0
+      ? share.driveConnections.map((connection) => ({
+          refreshToken: connection.refreshToken,
+          folderId: connection.folderId,
+        }))
+      : share.driveFolderId && share.driveRefreshToken
+        ? [{ refreshToken: share.driveRefreshToken, folderId: share.driveFolderId }]
+        : []
+
+  if (driveTargets.length === 0) {
     return { uploaded: 0, skipped: 0, failed: 0 }
   }
 
@@ -125,5 +147,14 @@ export async function syncEventFilesToConnectedDrive(eventId: string, responseId
   })
 
   if (driveFiles.length === 0) return { uploaded: 0, skipped: 0, failed: 0 }
-  return syncDriveGalleryFiles(share.driveRefreshToken, share.driveFolderId, driveFiles)
+
+  const total = { uploaded: 0, skipped: 0, failed: 0 }
+  for (const target of driveTargets) {
+    const result = await syncDriveGalleryFiles(target.refreshToken, target.folderId, driveFiles)
+    total.uploaded += result.uploaded
+    total.skipped += result.skipped
+    total.failed += result.failed
+  }
+
+  return total
 }
