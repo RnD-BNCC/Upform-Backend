@@ -3,6 +3,7 @@ import { redis } from '../config/redis.js'
 import { mailer, SMTP_FROM } from '../config/mailer.js'
 import { prisma } from '../config/prisma.js'
 import type { EmailJobData } from '../queues/email.queue.js'
+import { getInlineEmailAttachments, inlineBrandLogo } from '../utils/email-inline-assets.js'
 
 async function processEmail(job: Job<EmailJobData>) {
   const { blastId, recipient, subject, html } = job.data
@@ -12,7 +13,15 @@ async function processEmail(job: Job<EmailJobData>) {
     data: { status: 'processing' },
   })
 
-  await mailer.sendMail({ from: SMTP_FROM, to: recipient, subject, html })
+  const emailHtml = inlineBrandLogo(html)
+
+  await mailer.sendMail({
+    attachments: getInlineEmailAttachments(emailHtml),
+    from: SMTP_FROM,
+    html: emailHtml,
+    subject,
+    to: recipient,
+  })
 
   await prisma.emailLog.upsert({
     where: { blastId_recipient: { blastId, recipient } },
