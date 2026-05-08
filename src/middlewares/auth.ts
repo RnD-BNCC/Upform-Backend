@@ -1,5 +1,5 @@
 import type { Request, Response, NextFunction } from 'express'
-import { auth } from '../config/auth.js'
+import { auth, isEmailAllowed } from '../config/auth.js'
 import { fromNodeHeaders } from 'better-auth/node'
 
 export interface AuthUser {
@@ -16,6 +16,11 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
 
   if (!session?.user) {
     res.status(401).json({ error: 'Unauthorized' })
+    return
+  }
+
+  if (!isEmailAllowed(session.user.email)) {
+    res.status(403).json({ error: 'Unauthorized email' })
     return
   }
 

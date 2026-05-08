@@ -1,5 +1,6 @@
 import { mailer, SMTP_FROM } from '../config/mailer.js'
 import { prisma } from '../config/prisma.js'
+import { getInlineEmailAttachments, inlineBrandLogo } from './email-inline-assets.js'
 
 type SubmitFormSetting = {
   body: string
@@ -108,9 +109,10 @@ export async function sendSubmitConfirmationEmail(
   const subjectTemplate = settings.subject || `Submission received: ${event.name || 'Form'}`
   const bodyTemplate = settings.body || DEFAULT_SUBMIT_EMAIL_BODY
   const subject = stripHtml(renderTemplate(subjectTemplate, tokens)) || 'Submission received'
-  const html = renderTemplate(bodyTemplate, tokens)
+  const html = inlineBrandLogo(renderTemplate(bodyTemplate, tokens))
 
   await mailer.sendMail({
+    attachments: getInlineEmailAttachments(html),
     from: SMTP_FROM,
     html,
     subject,
