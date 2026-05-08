@@ -11,7 +11,7 @@ RUN npx prisma generate
 
 COPY tsconfig.json ./
 COPY src ./src
-RUN npm run build
+RUN npm run build && mkdir -p dist/assets && cp src/assets/* dist/assets/
 
 FROM node:22-alpine
 WORKDIR /app

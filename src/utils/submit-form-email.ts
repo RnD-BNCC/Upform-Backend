@@ -1,5 +1,9 @@
+import { fileURLToPath } from 'node:url'
 import { mailer, SMTP_FROM } from '../config/mailer.js'
 import { prisma } from '../config/prisma.js'
+
+const BRAND_LOGO_CID = 'upform-logo'
+const BRAND_LOGO_PATH = fileURLToPath(new URL('../assets/logo_blue.png', import.meta.url))
 
 type SubmitFormSetting = {
   body: string
@@ -84,6 +88,17 @@ function renderTemplate(template: string, tokens: Record<string, string>) {
   )
 }
 
+function inlineBrandLogo(html: string) {
+  return html.replace(
+    /<img([^>]*\balt=["']UpForm["'][^>]*)\bsrc=["'][^"']*logo_blue\.png["']([^>]*)>/i,
+    `<img$1src="cid:${BRAND_LOGO_CID}"$2>`,
+  )
+}
+
+function hasInlineBrandLogo(html: string) {
+  return html.includes(`cid:${BRAND_LOGO_CID}`)
+}
+
 export async function sendSubmitConfirmationEmail(
   event: SubmitEmailEvent,
   response: SubmitEmailResponse,
@@ -108,9 +123,19 @@ export async function sendSubmitConfirmationEmail(
   const subjectTemplate = settings.subject || `Submission received: ${event.name || 'Form'}`
   const bodyTemplate = settings.body || DEFAULT_SUBMIT_EMAIL_BODY
   const subject = stripHtml(renderTemplate(subjectTemplate, tokens)) || 'Submission received'
-  const html = renderTemplate(bodyTemplate, tokens)
+  const html = inlineBrandLogo(renderTemplate(bodyTemplate, tokens))
 
   await mailer.sendMail({
+    attachments: hasInlineBrandLogo(html)
+      ? [
+          {
+            cid: BRAND_LOGO_CID,
+            contentType: 'image/png',
+            filename: 'upform-logo.png',
+            path: BRAND_LOGO_PATH,
+          },
+        ]
+      : undefined,
     from: SMTP_FROM,
     html,
     subject,
