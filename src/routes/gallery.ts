@@ -1,12 +1,22 @@
 import { Router } from 'express'
 import {
+  completeGalleryDriveAuth,
+  connectGalleryDrive,
   deleteGalleryFile,
+  getGalleryShare,
+  getSharedGalleryFiles,
   listGalleryFiles,
   listGalleryMedia,
+  previewGalleryFile,
+  startGalleryDriveAuth,
+  updateGalleryShare,
 } from '../controllers/gallery.controller.js'
 import { requireAuth } from '../middlewares/auth.js'
 
 const router = Router()
+router.get('/share/:token', getSharedGalleryFiles)
+router.get('/share/drive/callback', completeGalleryDriveAuth)
+router.get('/file/preview', previewGalleryFile)
 router.use(requireAuth)
 
 /**
@@ -95,6 +105,10 @@ router.use(requireAuth)
  *               $ref: '#/components/schemas/Error'
  */
 router.get('/files', listGalleryFiles)
+router.get('/events/:eventId/share', getGalleryShare)
+router.patch('/events/:eventId/share', updateGalleryShare)
+router.get('/events/:eventId/share/drive/auth', startGalleryDriveAuth)
+router.post('/events/:eventId/share/drive', connectGalleryDrive)
 
 /**
  * @swagger

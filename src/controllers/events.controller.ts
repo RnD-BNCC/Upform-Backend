@@ -24,7 +24,7 @@ export async function listEvents(req: Request, res: Response) {
         where,
         include: {
           sections: { orderBy: { order: 'asc' } },
-          _count: { select: { responses: true } },
+          _count: { select: { responses: { where: { deletedAt: null } } } },
         },
         orderBy: { updatedAt: 'desc' },
         skip,
@@ -32,7 +32,10 @@ export async function listEvents(req: Request, res: Response) {
       }),
       prisma.event.count({ where }),
       prisma.event.findMany({
-        select: { status: true, _count: { select: { responses: true } } },
+        select: {
+          status: true,
+          _count: { select: { responses: { where: { deletedAt: null } } } },
+        },
       }),
     ])
 
@@ -63,7 +66,10 @@ export async function getEvent(req: Request<EventParams>, res: Response) {
       where: { id: req.params.id },
       include: {
         sections: { orderBy: { order: 'asc' } },
-        responses: { orderBy: { submittedAt: 'desc' } },
+        responses: {
+          where: { deletedAt: null },
+          orderBy: { submittedAt: 'desc' },
+        },
       },
     })
 
