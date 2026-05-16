@@ -1,12 +1,27 @@
 import type { Request, Response } from 'express'
 import { prisma } from '../config/prisma.js'
 import type { Prisma } from '../../generated/prisma/index.js'
-import { syncAndAppendRow } from '../config/google-sheets.js'
 import { handleControllerError } from '../utils/controller-error.js'
 import { sendSubmitConfirmationEmail } from '../utils/submit-form-email.js'
 import { syncEventFilesToConnectedDrive } from '../services/gallery-drive-sync.js'
+import { createFormAuditLog } from '../services/form-audit.js'
+import type { AuthUser } from '../middlewares/auth.js'
 import type { ResponseParams, UpdateResponseBody } from '../types/responses.js'
 import type { SubmitResponseBody } from '../types/response-progress.js'
+
+const RECORD_STSRC = {
+  available: 'A',
+  updated: 'U',
+  deleted: 'D',
+} as const
+
+function getAuthEmail(res: Response) {
+  return (res.locals.user as AuthUser | undefined)?.email ?? null
+}
+
+function asJson(value: unknown) {
+  return JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue
+}
 
 export async function listResponses(
   req: Request<Pick<ResponseParams, 'eventId'>>,
@@ -15,7 +30,7 @@ export async function listResponses(
   try {
     const { eventId } = req.params
 
-    const event = await prisma.event.findUnique({ where: { id: eventId } })
+    const event = await prisma.event.findFirst({ where: { id: eventId, stsrc: { not: 'D' } } })
     if (!event) {
       res.status(404).json({ error: 'Event not found' })
       return
@@ -23,7 +38,10 @@ export async function listResponses(
 
     const includeDeleted = req.query.includeDeleted === 'true'
     const responses = await prisma.response.findMany({
-      where: { eventId, ...(includeDeleted ? {} : { deletedAt: null }) },
+      where: {
+        eventId,
+        ...(includeDeleted ? {} : { stsrc: { not: RECORD_STSRC.deleted } }),
+      },
       orderBy: { submittedAt: 'desc' },
     })
 
@@ -53,7 +71,7 @@ export async function submitResponse(
     } = req.body
 
     const event = await prisma.event.findFirst({
-      where: { id: eventId, status: 'active' },
+      where: { id: eventId, status: 'active', stsrc: { not: 'D' } },
       include: {
         sections: { orderBy: { order: 'asc' } },
         submitFormSetting: true,
@@ -75,36 +93,25 @@ export async function submitResponse(
         progressPercent: progressPercent ?? 100,
         respondentUuid,
         sectionHistory: sectionHistory ?? [],
+        stsrc: RECORD_STSRC.available,
         startedAt: parseOptionalDate(startedAt),
         userAgent,
       },
     })
 
     if (progressId) {
-      await prisma.responseProgress.deleteMany({
-        where: { id: progressId, eventId },
+      await prisma.responseProgress.updateMany({
+        where: { id: progressId, eventId, stsrc: { not: RECORD_STSRC.deleted } },
+        data: { deletedAt: new Date(), stsrc: RECORD_STSRC.deleted },
       })
     } else if (respondentUuid) {
-      await prisma.responseProgress.deleteMany({
-        where: { eventId, respondentUuid },
+      await prisma.responseProgress.updateMany({
+        where: { eventId, respondentUuid, stsrc: { not: RECORD_STSRC.deleted } },
+        data: { deletedAt: new Date(), stsrc: RECORD_STSRC.deleted },
       })
     }
 
     res.status(201).json(response)
-
-    if (event.spreadsheetId && event.spreadsheetToken) {
-      const allFields = event.sections.flatMap((section) => {
-        const fields = section.fields as Array<{ id: string; label: string; type: string }>
-        return fields.filter((field) => field.type !== 'title_block' && field.type !== 'image_block')
-      })
-      syncAndAppendRow(
-        event.spreadsheetToken,
-        event.spreadsheetId,
-        allFields,
-        answers as Record<string, string | string[]>,
-        response.submittedAt.toISOString(),
-      ).catch((error) => console.error('[Responses] spreadsheet sync+append failed:', error))
-    }
 
     sendSubmitConfirmationEmail(event, response).catch((error) =>
       console.error('[Responses] submit confirmation email failed:', error),
@@ -127,14 +134,14 @@ export async function getResponse(req: Request<ResponseParams>, res: Response) {
   try {
     const { eventId, responseId } = req.params
 
-    const event = await prisma.event.findUnique({ where: { id: eventId } })
+    const event = await prisma.event.findFirst({ where: { id: eventId, stsrc: { not: 'D' } } })
     if (!event) {
       res.status(404).json({ error: 'Event not found' })
       return
     }
 
     const response = await prisma.response.findFirst({
-      where: { id: responseId, eventId, deletedAt: null },
+      where: { id: responseId, eventId, stsrc: { not: RECORD_STSRC.deleted } },
     })
     if (!response) {
       res.status(404).json({ error: 'Response not found' })
@@ -156,16 +163,33 @@ export async function updateResponse(
     const { answers } = req.body
 
     const existing = await prisma.response.findFirst({
-      where: { id: responseId, eventId, deletedAt: null },
+      where: { id: responseId, eventId, stsrc: { not: RECORD_STSRC.deleted } },
     })
     if (!existing) {
       res.status(404).json({ error: 'Response not found' })
       return
     }
 
-    const response = await prisma.response.update({
-      where: { id: existing.id },
-      data: { answers: (answers ?? existing.answers) as Prisma.InputJsonValue },
+    const response = await prisma.$transaction(async (tx) => {
+      const updated = await tx.response.update({
+        where: { id: existing.id },
+        data: {
+          answers: (answers ?? existing.answers) as Prisma.InputJsonValue,
+          stsrc: RECORD_STSRC.updated,
+        },
+      })
+
+      await createFormAuditLog(tx, {
+        action: 'response.update',
+        actorEmail: getAuthEmail(res),
+        afterSnapshot: asJson(updated),
+        beforeSnapshot: asJson(existing),
+        eventId,
+        targetId: existing.id,
+        targetType: 'response',
+      })
+
+      return updated
     })
 
     res.json(response)
@@ -181,23 +205,35 @@ export async function deleteResponse(req: Request<ResponseParams>, res: Response
   try {
     const { eventId, responseId } = req.params
 
-    const event = await prisma.event.findUnique({ where: { id: eventId } })
+    const event = await prisma.event.findFirst({ where: { id: eventId, stsrc: { not: 'D' } } })
     if (!event) {
       res.status(404).json({ error: 'Event not found' })
       return
     }
 
     const existing = await prisma.response.findFirst({
-      where: { id: responseId, eventId, deletedAt: null },
+      where: { id: responseId, eventId, stsrc: { not: RECORD_STSRC.deleted } },
     })
     if (!existing) {
       res.status(404).json({ error: 'Response not found' })
       return
     }
 
-    await prisma.response.update({
-      where: { id: responseId },
-      data: { deletedAt: new Date() },
+    await prisma.$transaction(async (tx) => {
+      const deleted = await tx.response.update({
+        where: { id: responseId },
+        data: { deletedAt: new Date(), stsrc: RECORD_STSRC.deleted },
+      })
+
+      await createFormAuditLog(tx, {
+        action: 'response.delete',
+        actorEmail: getAuthEmail(res),
+        afterSnapshot: asJson(deleted),
+        beforeSnapshot: asJson(existing),
+        eventId,
+        targetId: existing.id,
+        targetType: 'response',
+      })
     })
     res.status(204).send()
   } catch (error) {

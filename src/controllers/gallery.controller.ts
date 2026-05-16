@@ -18,6 +18,7 @@ import { handleControllerError } from '../utils/controller-error.js'
 import type { AuthUser } from '../middlewares/auth.js'
 import type { FileEntry, FormField } from '../types/gallery.js'
 import type { Prisma } from '../../generated/prisma/index.js'
+import { getActiveFormFields } from '../utils/form-fields.js'
 
 const S3_BASE_URL = `https://s3.bncc.net/${S3_BUCKET}/`
 
@@ -57,8 +58,10 @@ type GalleryDriveConnectionRecord = {
 }
 
 type GalleryEventSource = {
+  deletedAt?: Date | null
   id: string
   name: string
+  stsrc?: string
   status: string
   sections: Array<{ fields: unknown }>
   responses: Array<{
@@ -328,7 +331,7 @@ function removeFileUrlFromAnswerValue(value: unknown, url: string) {
 
 async function removeGalleryFileReferences(url: string) {
   const responses = await prisma.response.findMany({
-    where: { deletedAt: null },
+    where: { stsrc: { not: 'D' } },
     select: { id: true, answers: true },
   })
 
@@ -348,7 +351,7 @@ async function removeGalleryFileReferences(url: string) {
 
       await prisma.response.update({
         where: { id: response.id },
-        data: { answers: nextAnswers as Prisma.InputJsonValue },
+        data: { answers: nextAnswers as Prisma.InputJsonValue, stsrc: 'U' },
       })
     }),
   )
@@ -364,9 +367,10 @@ function isNoSuchKeyError(error: unknown) {
 }
 
 function buildGalleryEvent(event: GalleryEventSource, req: Request) {
+  if (event.stsrc === 'D' || event.deletedAt) return null
+
   const allFields: FormField[] = event.sections.flatMap((section) => {
-    const fields = section.fields as FormField[]
-    return Array.isArray(fields) ? fields : []
+    return getActiveFormFields(section.fields) as FormField[]
   })
   const fileFields = allFields.filter((field) => field.type === 'file_upload')
   if (fileFields.length === 0) return null
@@ -593,10 +597,11 @@ export async function listGalleryFiles(req: Request, res: Response) {
     const skip = (page - 1) * take
 
     const events = await prisma.event.findMany({
+      where: { stsrc: { not: 'D' } },
       include: {
         sections: { orderBy: { order: 'asc' } },
         responses: {
-          where: { deletedAt: null },
+          where: { stsrc: { not: 'D' } },
           orderBy: { submittedAt: 'desc' },
         },
         galleryShare: {
@@ -629,12 +634,12 @@ export async function listGalleryFiles(req: Request, res: Response) {
 export async function getGalleryShare(req: Request, res: Response) {
   try {
     const { eventId } = req.params as Record<string, string>
-    const event = await prisma.event.findUnique({
-      where: { id: eventId },
+    const event = await prisma.event.findFirst({
+      where: { id: eventId, stsrc: { not: 'D' } },
       include: {
         sections: { orderBy: { order: 'asc' } },
         responses: {
-          where: { deletedAt: null },
+          where: { stsrc: { not: 'D' } },
           orderBy: { submittedAt: 'desc' },
         },
       },
@@ -661,12 +666,12 @@ export async function updateGalleryShare(req: Request, res: Response) {
   try {
     const { eventId } = req.params as Record<string, string>
     const body = req.body as Record<string, unknown>
-    const event = await prisma.event.findUnique({
-      where: { id: eventId },
+    const event = await prisma.event.findFirst({
+      where: { id: eventId, stsrc: { not: 'D' } },
       include: {
         sections: { orderBy: { order: 'asc' } },
         responses: {
-          where: { deletedAt: null },
+          where: { stsrc: { not: 'D' } },
           orderBy: { submittedAt: 'desc' },
         },
       },
@@ -761,7 +766,7 @@ export async function startGalleryDriveAuth(req: Request, res: Response) {
   try {
     const user = res.locals.user as AuthUser
     const { eventId } = req.params as Record<string, string>
-    const event = await prisma.event.findUnique({ where: { id: eventId } })
+    const event = await prisma.event.findFirst({ where: { id: eventId, stsrc: { not: 'D' } } })
     if (!event) {
       res.status(404).json({ error: 'Event not found' })
       return
@@ -820,12 +825,12 @@ export async function completeGalleryDriveAuth(req: Request, res: Response) {
       return
     }
 
-    const event = await prisma.event.findUnique({
-      where: { id: state.eventId },
+    const event = await prisma.event.findFirst({
+      where: { id: state.eventId, stsrc: { not: 'D' } },
       include: {
         sections: { orderBy: { order: 'asc' } },
         responses: {
-          where: { deletedAt: null },
+          where: { stsrc: { not: 'D' } },
           orderBy: { submittedAt: 'desc' },
         },
       },
@@ -868,12 +873,12 @@ export async function connectGalleryDrive(req: Request, res: Response) {
     const user = res.locals.user as AuthUser
     const { eventId } = req.params as Record<string, string>
 
-    const event = await prisma.event.findUnique({
-      where: { id: eventId },
+    const event = await prisma.event.findFirst({
+      where: { id: eventId, stsrc: { not: 'D' } },
       include: {
         sections: { orderBy: { order: 'asc' } },
         responses: {
-          where: { deletedAt: null },
+          where: { stsrc: { not: 'D' } },
           orderBy: { submittedAt: 'desc' },
         },
       },
@@ -921,7 +926,7 @@ export async function getSharedGalleryFiles(req: Request, res: Response) {
           include: {
             sections: { orderBy: { order: 'asc' } },
             responses: {
-              where: { deletedAt: null },
+              where: { stsrc: { not: 'D' } },
               orderBy: { submittedAt: 'desc' },
             },
           },

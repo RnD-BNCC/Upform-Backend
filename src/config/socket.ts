@@ -7,6 +7,7 @@ let io: Server | null = null
 const pollParticipants = new Map<string, Map<string, { id: string; name: string; avatarSeed?: string; score: number }>>()
 const pollLeaderboardActive = new Map<string, boolean>()
 const pollLeaderboardScores = new Map<string, Array<{ id: string; name: string; avatarSeed?: string; score: number }>>()
+const POLL_STSRC_DELETED = 'D'
 
 function broadcastParticipantList(pollId: string) {
   const map = pollParticipants.get(pollId)
@@ -50,7 +51,9 @@ export function initSocket(httpServer: HttpServer) {
       io!.to(`poll:${pollId}`).emit('participant-count', room?.size ?? 0)
 
       try {
-        const poll = await prisma.poll.findUnique({ where: { id: pollId } })
+        const poll = await prisma.poll.findFirst({
+          where: { id: pollId, stsrc: { not: POLL_STSRC_DELETED } },
+        })
         if (poll) {
           socket.emit('slide-change', { currentSlide: poll.currentSlide })
           socket.emit('poll-state', { status: poll.status })
@@ -117,8 +120,33 @@ export function initSocket(httpServer: HttpServer) {
       pollLeaderboardScores.delete(pollId)
       // reset Q&A on score reset
       try {
-        await prisma.questionLike.deleteMany({ where: { question: { pollId } } })
-        await prisma.question.deleteMany({ where: { pollId } })
+        const poll = await prisma.poll.findFirst({
+          where: { id: pollId, stsrc: { not: POLL_STSRC_DELETED } },
+          select: { id: true },
+        })
+        if (!poll) return
+
+        const deletedAt = new Date()
+        await prisma.$transaction([
+          prisma.questionLike.updateMany({
+            where: {
+              question: { pollId },
+              stsrc: { not: POLL_STSRC_DELETED },
+            },
+            data: { deletedAt, stsrc: POLL_STSRC_DELETED },
+          }),
+          prisma.question.updateMany({
+            where: { pollId, stsrc: { not: POLL_STSRC_DELETED } },
+            data: { deletedAt, stsrc: POLL_STSRC_DELETED },
+          }),
+          prisma.pollVote.updateMany({
+            where: {
+              slide: { pollId, type: 'qa' },
+              stsrc: { not: POLL_STSRC_DELETED },
+            },
+            data: { deletedAt, stsrc: POLL_STSRC_DELETED },
+          }),
+        ])
       } catch (err) {
         console.error('[socket:reset-scores] Failed to clear questions:', err)
       }
@@ -134,8 +162,19 @@ export function initSocket(httpServer: HttpServer) {
         return
       }
 
+      const poll = await prisma.poll.findFirst({
+        where: { id: pollId, stsrc: { not: POLL_STSRC_DELETED } },
+        select: { id: true },
+      })
+      if (!poll) {
+        socket.emit('question:error', { code: 'POLL_NOT_FOUND', message: 'Poll tidak ditemukan.' })
+        return
+      }
+
       if (authorId) {
-        const count = await prisma.question.count({ where: { pollId, authorId } })
+        const count = await prisma.question.count({
+          where: { pollId, authorId, stsrc: { not: POLL_STSRC_DELETED } },
+        })
         if (count >= 5) {
           socket.emit('question:error', { code: 'LIMIT_EXCEEDED', message: 'Kamu sudah mencapai batas maksimal 5 pertanyaan.' })
           return
@@ -149,7 +188,14 @@ export function initSocket(httpServer: HttpServer) {
       // Create PollVote FIRST so we can include pollVoteId in question:new
       let pollVoteId: string | undefined
       try {
-        const slide = await prisma.pollSlide.findFirst({ where: { pollId, type: 'qa' } })
+        const slide = await prisma.pollSlide.findFirst({
+          where: {
+            pollId,
+            type: 'qa',
+            stsrc: { not: POLL_STSRC_DELETED },
+            poll: { stsrc: { not: POLL_STSRC_DELETED } },
+          },
+        })
         if (slide) {
           const pollVote = await prisma.pollVote.create({
             data: {
@@ -180,23 +226,47 @@ export function initSocket(httpServer: HttpServer) {
 
     socket.on('question:like', async ({ pollId, questionId, userId, like }: { pollId: string; questionId: string; userId: string; like: boolean }) => {
       try {
+        const existingQuestion = await prisma.question.findFirst({
+          where: {
+            id: questionId,
+            pollId,
+            stsrc: { not: POLL_STSRC_DELETED },
+            poll: { stsrc: { not: POLL_STSRC_DELETED } },
+          },
+          select: { id: true },
+        })
+        if (!existingQuestion) return
+
         await prisma.$transaction(async (tx) => {
           if (like) {
-            await tx.questionLike.upsert({
+            const existing = await tx.questionLike.findUnique({
               where: { questionId_userId: { questionId, userId } },
-              create: { questionId, userId },
-              update: {},
             })
-            await tx.question.update({
-              where: { id: questionId },
-              data: { likeCount: { increment: 1 } },
-            })
+            if (!existing) {
+              await tx.questionLike.create({ data: { questionId, userId } })
+              await tx.question.update({
+                where: { id: questionId },
+                data: { likeCount: { increment: 1 } },
+              })
+            } else if (existing.stsrc === POLL_STSRC_DELETED) {
+              await tx.questionLike.update({
+                where: { questionId_userId: { questionId, userId } },
+                data: { deletedAt: null, stsrc: 'A' },
+              })
+              await tx.question.update({
+                where: { id: questionId },
+                data: { likeCount: { increment: 1 } },
+              })
+            }
           } else {
             const existing = await tx.questionLike.findUnique({
               where: { questionId_userId: { questionId, userId } },
             })
-            if (existing) {
-              await tx.questionLike.delete({ where: { questionId_userId: { questionId, userId } } })
+            if (existing && existing.stsrc !== POLL_STSRC_DELETED) {
+              await tx.questionLike.update({
+                where: { questionId_userId: { questionId, userId } },
+                data: { deletedAt: new Date(), stsrc: POLL_STSRC_DELETED },
+              })
               await tx.question.update({
                 where: { id: questionId },
                 data: { likeCount: { decrement: 1 } },
@@ -207,7 +277,10 @@ export function initSocket(httpServer: HttpServer) {
 
         const [question, likes] = await Promise.all([
           prisma.question.findUnique({ where: { id: questionId }, select: { likeCount: true } }),
-          prisma.questionLike.findMany({ where: { questionId }, select: { userId: true } }),
+          prisma.questionLike.findMany({
+            where: { questionId, stsrc: { not: POLL_STSRC_DELETED } },
+            select: { userId: true },
+          }),
         ])
 
         io?.to(`poll:${pollId}`).emit('question:like_updated', {

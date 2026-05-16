@@ -4,6 +4,7 @@ import { prisma } from '../config/prisma.js'
 import { s3, S3_BUCKET } from '../config/s3.js'
 import { syncDriveGalleryFiles, type DriveGalleryFile } from '../config/google-drive.js'
 import type { FileEntry, FormField } from '../types/gallery.js'
+import { getActiveFormFields } from '../utils/form-fields.js'
 
 const S3_BASE_URL = `https://s3.bncc.net/${S3_BUCKET}/`
 const TEXT_TYPES = new Set(['text', 'short_text', 'email', 'short_answer', 'name', 'paragraph'])
@@ -95,13 +96,13 @@ export async function syncEventFilesToConnectedDrive(eventId: string, responseId
     return { uploaded: 0, skipped: 0, failed: 0 }
   }
 
-  const event = await prisma.event.findUnique({
-    where: { id: eventId },
+  const event = await prisma.event.findFirst({
+    where: { id: eventId, stsrc: { not: 'D' } },
     include: {
       sections: { orderBy: { order: 'asc' } },
       responses: {
         where: {
-          deletedAt: null,
+          stsrc: { not: 'D' },
           ...(responseId ? { id: responseId } : {}),
         },
         orderBy: { submittedAt: 'desc' },
@@ -111,8 +112,7 @@ export async function syncEventFilesToConnectedDrive(eventId: string, responseId
   if (!event) return { uploaded: 0, skipped: 0, failed: 0 }
 
   const allFields: FormField[] = event.sections.flatMap((section) => {
-    const fields = section.fields as FormField[]
-    return Array.isArray(fields) ? fields : []
+    return getActiveFormFields(section.fields) as FormField[]
   })
   const fileFields = allFields.filter((field) => field.type === 'file_upload')
   if (fileFields.length === 0) return { uploaded: 0, skipped: 0, failed: 0 }

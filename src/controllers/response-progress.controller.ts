@@ -2,6 +2,23 @@ import type { Request, Response } from 'express'
 import { prisma } from '../config/prisma.js'
 import { handleControllerError } from '../utils/controller-error.js'
 import type { SaveResponseProgressBody, ResponseProgressParams } from '../types/response-progress.js'
+import { createFormAuditLog } from '../services/form-audit.js'
+import type { AuthUser } from '../middlewares/auth.js'
+import type { Prisma } from '../../generated/prisma/index.js'
+
+const RECORD_STSRC = {
+  available: 'A',
+  updated: 'U',
+  deleted: 'D',
+} as const
+
+function getAuthEmail(res: Response) {
+  return (res.locals.user as AuthUser | undefined)?.email ?? null
+}
+
+function asJson(value: unknown) {
+  return JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue
+}
 
 function parseOptionalDate(value: unknown) {
   if (typeof value !== 'string' || !value.trim()) return undefined
@@ -31,7 +48,7 @@ export async function listResponseProgress(
   try {
     const { eventId } = req.params
 
-    const event = await prisma.event.findUnique({ where: { id: eventId } })
+    const event = await prisma.event.findFirst({ where: { id: eventId, stsrc: { not: 'D' } } })
     if (!event) {
       res.status(404).json({ error: 'Event not found' })
       return
@@ -39,7 +56,10 @@ export async function listResponseProgress(
 
     const includeDeleted = req.query.includeDeleted === 'true'
     const progress = await prisma.responseProgress.findMany({
-      where: { eventId, ...(includeDeleted ? {} : { deletedAt: null }) },
+      where: {
+        eventId,
+        ...(includeDeleted ? {} : { stsrc: { not: RECORD_STSRC.deleted } }),
+      },
       orderBy: { updatedAt: 'desc' },
     })
 
@@ -57,16 +77,30 @@ export async function updateResponseProgress(
     const { eventId, progressId } = req.params
 
     const existing = await prisma.responseProgress.findFirst({
-      where: { id: progressId, eventId, deletedAt: null },
+      where: { id: progressId, eventId, stsrc: { not: RECORD_STSRC.deleted } },
     })
     if (!existing) {
       res.status(404).json({ error: 'Response progress not found' })
       return
     }
 
-    const progress = await prisma.responseProgress.update({
-      where: { id: existing.id },
-      data: getProgressData(req.body),
+    const progress = await prisma.$transaction(async (tx) => {
+      const updated = await tx.responseProgress.update({
+        where: { id: existing.id },
+        data: { ...getProgressData(req.body), stsrc: RECORD_STSRC.updated },
+      })
+
+      await createFormAuditLog(tx, {
+        action: 'responseProgress.update',
+        actorEmail: getAuthEmail(res),
+        afterSnapshot: asJson(updated),
+        beforeSnapshot: asJson(existing),
+        eventId,
+        targetId: existing.id,
+        targetType: 'responseProgress',
+      })
+
+      return updated
     })
 
     res.json(progress)
@@ -82,9 +116,29 @@ export async function deleteResponseProgress(
   try {
     const { eventId, progressId } = req.params
 
-    await prisma.responseProgress.updateMany({
-      where: { id: progressId, eventId, deletedAt: null },
-      data: { deletedAt: new Date() },
+    const existing = await prisma.responseProgress.findFirst({
+      where: { id: progressId, eventId, stsrc: { not: RECORD_STSRC.deleted } },
+    })
+    if (!existing) {
+      res.status(404).json({ error: 'Response progress not found' })
+      return
+    }
+
+    await prisma.$transaction(async (tx) => {
+      const deleted = await tx.responseProgress.update({
+        where: { id: existing.id },
+        data: { deletedAt: new Date(), stsrc: RECORD_STSRC.deleted },
+      })
+
+      await createFormAuditLog(tx, {
+        action: 'responseProgress.delete',
+        actorEmail: getAuthEmail(res),
+        afterSnapshot: asJson(deleted),
+        beforeSnapshot: asJson(existing),
+        eventId,
+        targetId: existing.id,
+        targetType: 'responseProgress',
+      })
     })
 
     res.status(204).send()

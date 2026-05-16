@@ -6,6 +6,7 @@ import {
   getPoll,
   listPollScores,
   listPolls,
+  restorePoll,
   updatePoll,
 } from '../controllers/polls.controller.js'
 import { requireAuth } from '../middlewares/auth.js'
@@ -141,6 +142,29 @@ router.patch('/:id', updatePoll)
  *         description: Not found
  */
 router.delete('/:id', deletePoll)
+
+/**
+ * @swagger
+ * /api/polls/{id}/restore:
+ *   post:
+ *     summary: Restore a deleted poll
+ *     tags: [Polls]
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *     responses:
+ *       200:
+ *         description: Restored poll
+ *       404:
+ *         description: Not found
+ */
+router.post('/:id/restore', restorePoll)
 
 /**
  * @swagger

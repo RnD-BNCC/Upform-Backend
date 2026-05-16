@@ -8,7 +8,9 @@
     "start": "node dist/index.js",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
-    "db:studio": "prisma studio"
+    "db:studio": "prisma studio",
+    "seed:activists": "tsx src/scripts/seed-activists.ts",
+    "seed:activists:reset": "tsx src/scripts/seed-activists.ts --reset-password"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1013.0",

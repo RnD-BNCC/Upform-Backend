@@ -5,6 +5,7 @@ import {
   updateResponseProgress,
 } from '../controllers/response-progress.controller.js'
 import { requireAuth } from '../middlewares/auth.js'
+import { PERMISSION_ACTIONS, requirePermission } from '../middlewares/permission.js'
 
 const router = Router({ mergeParams: true })
 
@@ -51,7 +52,14 @@ const router = Router({ mergeParams: true })
  *             schema:
  *               $ref: '#/components/schemas/Error'
  */
-router.get('/', requireAuth, listResponseProgress)
+router.get(
+  '/',
+  requireAuth,
+  requirePermission(PERMISSION_ACTIONS.viewResponses, (req) => ({
+    resourceId: String(req.params.eventId),
+  })),
+  listResponseProgress,
+)
 
 /**
  * @swagger
@@ -100,7 +108,14 @@ router.get('/', requireAuth, listResponseProgress)
  *             schema:
  *               $ref: '#/components/schemas/Error'
  */
-router.patch('/:progressId', requireAuth, updateResponseProgress)
+router.patch(
+  '/:progressId',
+  requireAuth,
+  requirePermission(PERMISSION_ACTIONS.editResponse, (req) => ({
+    resourceId: String(req.params.eventId),
+  })),
+  updateResponseProgress,
+)
 
 /**
  * @swagger
@@ -133,6 +148,13 @@ router.patch('/:progressId', requireAuth, updateResponseProgress)
  *             schema:
  *               $ref: '#/components/schemas/Error'
  */
-router.delete('/:progressId', requireAuth, deleteResponseProgress)
+router.delete(
+  '/:progressId',
+  requireAuth,
+  requirePermission(PERMISSION_ACTIONS.deleteResponse, (req) => ({
+    resourceId: String(req.params.eventId),
+  })),
+  deleteResponseProgress,
+)
 
 export default router

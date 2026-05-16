@@ -3,11 +3,18 @@ import { prisma } from '../config/prisma.js'
 import { handleControllerError } from '../utils/controller-error.js'
 import { sendSubmitConfirmationEmail } from '../utils/submit-form-email.js'
 import { syncEventFilesToConnectedDrive } from '../services/gallery-drive-sync.js'
+import { withActiveEventSections } from '../utils/form-fields.js'
 import type {
   SaveResponseProgressBody,
   SubmitResponseBody,
   ResponseProgressParams,
 } from '../types/response-progress.js'
+
+const RECORD_STSRC = {
+  available: 'A',
+  updated: 'U',
+  deleted: 'D',
+} as const
 
 type PublicEventParams = {
   id: string
@@ -41,7 +48,7 @@ function getProgressData(body: SaveResponseProgressBody) {
 export async function getPublicEvent(req: Request<PublicEventParams>, res: Response) {
   try {
     const event = await prisma.event.findFirst({
-      where: { id: req.params.id, status: 'active' },
+      where: { id: req.params.id, status: 'active', stsrc: { not: 'D' } },
       include: {
         sections: { orderBy: { order: 'asc' } },
       },
@@ -52,7 +59,7 @@ export async function getPublicEvent(req: Request<PublicEventParams>, res: Respo
       return
     }
 
-    res.json(event)
+    res.json(withActiveEventSections(event))
   } catch (error) {
     handleControllerError('Public', 'get public event failed', error, res)
   }
@@ -77,7 +84,7 @@ export async function submitPublicResponse(
     } = req.body
 
     const event = await prisma.event.findFirst({
-      where: { id: req.params.id, status: 'active' },
+      where: { id: req.params.id, status: 'active', stsrc: { not: 'D' } },
       include: { submitFormSetting: true },
     })
     if (!event) {
@@ -96,18 +103,29 @@ export async function submitPublicResponse(
         progressPercent: progressPercent ?? 100,
         respondentUuid,
         sectionHistory: sectionHistory ?? [],
+        stsrc: RECORD_STSRC.available,
         startedAt: parseOptionalDate(startedAt),
         userAgent,
       },
     })
 
     if (progressId) {
-      await prisma.responseProgress.deleteMany({
-        where: { id: progressId, eventId: req.params.id },
+      await prisma.responseProgress.updateMany({
+        where: {
+          id: progressId,
+          eventId: req.params.id,
+          stsrc: { not: RECORD_STSRC.deleted },
+        },
+        data: { deletedAt: new Date(), stsrc: RECORD_STSRC.deleted },
       })
     } else if (respondentUuid) {
-      await prisma.responseProgress.deleteMany({
-        where: { eventId: req.params.id, respondentUuid },
+      await prisma.responseProgress.updateMany({
+        where: {
+          eventId: req.params.id,
+          respondentUuid,
+          stsrc: { not: RECORD_STSRC.deleted },
+        },
+        data: { deletedAt: new Date(), stsrc: RECORD_STSRC.deleted },
       })
     }
 
@@ -130,7 +148,7 @@ export async function savePublicResponseProgress(
 ) {
   try {
     const event = await prisma.event.findFirst({
-      where: { id: req.params.id, status: 'active' },
+      where: { id: req.params.id, status: 'active', stsrc: { not: 'D' } },
     })
     if (!event) {
       res.status(404).json({ error: 'Event not found or not active' })
@@ -141,9 +159,9 @@ export async function savePublicResponseProgress(
     const existing = progressData.respondentUuid
       ? await prisma.responseProgress.findFirst({
           where: {
-            deletedAt: null,
             eventId: req.params.id,
             respondentUuid: progressData.respondentUuid,
+            stsrc: { not: RECORD_STSRC.deleted },
           },
         })
       : null
@@ -151,12 +169,13 @@ export async function savePublicResponseProgress(
     const progress = existing
       ? await prisma.responseProgress.update({
           where: { id: existing.id },
-          data: progressData,
+          data: { ...progressData, stsrc: RECORD_STSRC.updated },
         })
       : await prisma.responseProgress.create({
           data: {
             ...progressData,
             eventId: req.params.id,
+            stsrc: RECORD_STSRC.available,
           },
         })
 
@@ -172,7 +191,7 @@ export async function updatePublicResponseProgress(
 ) {
   try {
     const event = await prisma.event.findFirst({
-      where: { id: req.params.id, status: 'active' },
+      where: { id: req.params.id, status: 'active', stsrc: { not: 'D' } },
     })
     if (!event) {
       res.status(404).json({ error: 'Event not found or not active' })
@@ -180,7 +199,11 @@ export async function updatePublicResponseProgress(
     }
 
     const existing = await prisma.responseProgress.findFirst({
-      where: { id: req.params.progressId, eventId: req.params.id, deletedAt: null },
+      where: {
+        id: req.params.progressId,
+        eventId: req.params.id,
+        stsrc: { not: RECORD_STSRC.deleted },
+      },
     })
     if (!existing) {
       res.status(404).json({ error: 'Response progress not found' })
@@ -189,7 +212,7 @@ export async function updatePublicResponseProgress(
 
     const progress = await prisma.responseProgress.update({
       where: { id: existing.id },
-      data: getProgressData(req.body),
+      data: { ...getProgressData(req.body), stsrc: RECORD_STSRC.updated },
     })
 
     res.json(progress)
@@ -203,8 +226,13 @@ export async function deletePublicResponseProgress(
   res: Response,
 ) {
   try {
-    await prisma.responseProgress.deleteMany({
-      where: { id: req.params.progressId, eventId: req.params.id },
+    await prisma.responseProgress.updateMany({
+      where: {
+        id: req.params.progressId,
+        eventId: req.params.id,
+        stsrc: { not: RECORD_STSRC.deleted },
+      },
+      data: { deletedAt: new Date(), stsrc: RECORD_STSRC.deleted },
     })
     res.status(204).send()
   } catch (error) {

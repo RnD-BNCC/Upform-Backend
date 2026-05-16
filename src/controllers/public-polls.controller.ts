@@ -6,11 +6,18 @@ import { handleControllerError } from '../utils/controller-error.js'
 import type { PollCodeParams, CorrectArea } from '../types/public-polls.js'
 import type { PollSlideParams, PollVoteParams } from '../types/poll-slides.js'
 
+const POLL_STSRC_DELETED = 'D'
+
 export async function joinPollByCode(req: Request<PollCodeParams>, res: Response) {
   try {
-    const poll = await prisma.poll.findUnique({
-      where: { code: req.params.code },
-      include: { slides: { orderBy: { order: 'asc' } } },
+    const poll = await prisma.poll.findFirst({
+      where: { code: req.params.code, stsrc: { not: POLL_STSRC_DELETED } },
+      include: {
+        slides: {
+          where: { stsrc: { not: POLL_STSRC_DELETED } },
+          orderBy: { order: 'asc' },
+        },
+      },
     })
 
     if (!poll || poll.status === 'ended') {
@@ -44,7 +51,12 @@ export async function submitPollVote(req: Request<PollSlideParams>, res: Respons
     }
 
     const slide = await prisma.pollSlide.findFirst({
-      where: { id: slideId, pollId, poll: { status: 'active' } },
+      where: {
+        id: slideId,
+        pollId,
+        stsrc: { not: POLL_STSRC_DELETED },
+        poll: { status: 'active', stsrc: { not: POLL_STSRC_DELETED } },
+      },
     })
     if (!slide) {
       res.status(404).json({ error: 'Slide not found or poll not active' })
@@ -60,13 +72,13 @@ export async function submitPollVote(req: Request<PollSlideParams>, res: Respons
     if (slide.type === 'qa') {
       const uniqueParticipantId = `${participantId}_${Date.now()}`
       vote = await prisma.pollVote.create({
-        data: { slideId, participantId: uniqueParticipantId, value },
+        data: { slideId, participantId: uniqueParticipantId, value, stsrc: 'A' },
       })
     } else {
       vote = await prisma.pollVote.upsert({
         where: { slideId_participantId: { slideId, participantId } },
-        create: { slideId, participantId, value },
-        update: { value },
+        create: { slideId, participantId, value, stsrc: 'A' },
+        update: { deletedAt: null, stsrc: 'A', value },
       })
     }
 
@@ -114,13 +126,18 @@ export async function submitPollVote(req: Request<PollSlideParams>, res: Respons
           priorVotes = await prisma.pollVote.count({
             where: {
               slideId,
+              stsrc: { not: POLL_STSRC_DELETED },
               createdAt: { lt: vote.createdAt },
               value: { path: ['option'], equals: correctAnswer },
             },
           })
         } else if (slide.type === 'word_cloud' && correctAnswers) {
           const prior = await prisma.pollVote.findMany({
-            where: { slideId, createdAt: { lt: vote.createdAt } },
+            where: {
+              slideId,
+              stsrc: { not: POLL_STSRC_DELETED },
+              createdAt: { lt: vote.createdAt },
+            },
             select: { value: true },
           })
           priorVotes = prior.filter((priorVote) => {
@@ -131,13 +148,18 @@ export async function submitPollVote(req: Request<PollSlideParams>, res: Respons
           priorVotes = await prisma.pollVote.count({
             where: {
               slideId,
+              stsrc: { not: POLL_STSRC_DELETED },
               createdAt: { lt: vote.createdAt },
               value: { path: ['value'], equals: correctNumber },
             },
           })
         } else if (slide.type === 'pin_on_image' && correctArea) {
           const prior = await prisma.pollVote.findMany({
-            where: { slideId, createdAt: { lt: vote.createdAt } },
+            where: {
+              slideId,
+              stsrc: { not: POLL_STSRC_DELETED },
+              createdAt: { lt: vote.createdAt },
+            },
             select: { value: true },
           })
           priorVotes = prior.filter((priorVote) => {
@@ -171,7 +193,12 @@ export async function getPollSlideResults(req: Request<PollSlideParams>, res: Re
     const { pollId, slideId } = req.params
 
     const slide = await prisma.pollSlide.findFirst({
-      where: { id: slideId, pollId },
+      where: {
+        id: slideId,
+        pollId,
+        stsrc: { not: POLL_STSRC_DELETED },
+        poll: { stsrc: { not: POLL_STSRC_DELETED } },
+      },
     })
     if (!slide) {
       res.status(404).json({ error: 'Slide not found' })
@@ -190,7 +217,16 @@ export async function togglePollVoteAnswer(req: Request<PollVoteParams>, res: Re
     const { pollId, slideId, voteId } = req.params
 
     const vote = await prisma.pollVote.findFirst({
-      where: { id: voteId, slideId },
+      where: {
+        id: voteId,
+        slideId,
+        stsrc: { not: POLL_STSRC_DELETED },
+        slide: {
+          pollId,
+          stsrc: { not: POLL_STSRC_DELETED },
+          poll: { stsrc: { not: POLL_STSRC_DELETED } },
+        },
+      },
     })
     if (!vote) {
       res.status(404).json({ error: 'Vote not found' })

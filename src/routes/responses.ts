@@ -7,6 +7,7 @@ import {
   updateResponse,
 } from '../controllers/responses.controller.js'
 import { requireAuth } from '../middlewares/auth.js'
+import { PERMISSION_ACTIONS, requirePermission } from '../middlewares/permission.js'
 
 const router = Router({ mergeParams: true })
 
@@ -53,7 +54,14 @@ const router = Router({ mergeParams: true })
  *             schema:
  *               $ref: '#/components/schemas/Error'
  */
-router.get('/', requireAuth, listResponses)
+router.get(
+  '/',
+  requireAuth,
+  requirePermission(PERMISSION_ACTIONS.viewResponses, (req) => ({
+    resourceId: String(req.params.eventId),
+  })),
+  listResponses,
+)
 
 /**
  * @swagger
@@ -118,7 +126,14 @@ router.post('/', submitResponse)
  *       404:
  *         description: Not found
  */
-router.get('/:responseId', requireAuth, getResponse)
+router.get(
+  '/:responseId',
+  requireAuth,
+  requirePermission(PERMISSION_ACTIONS.viewResponses, (req) => ({
+    resourceId: String(req.params.eventId),
+  })),
+  getResponse,
+)
 
 /**
  * @swagger
@@ -178,7 +193,14 @@ router.get('/:responseId', requireAuth, getResponse)
  *             schema:
  *               $ref: '#/components/schemas/Error'
  */
-router.patch('/:responseId', requireAuth, updateResponse)
+router.patch(
+  '/:responseId',
+  requireAuth,
+  requirePermission(PERMISSION_ACTIONS.editResponse, (req) => ({
+    resourceId: String(req.params.eventId),
+  })),
+  updateResponse,
+)
 
 /**
  * @swagger
@@ -207,6 +229,13 @@ router.patch('/:responseId', requireAuth, updateResponse)
  *       404:
  *         description: Not found
  */
-router.delete('/:responseId', requireAuth, deleteResponse)
+router.delete(
+  '/:responseId',
+  requireAuth,
+  requirePermission(PERMISSION_ACTIONS.deleteResponse, (req) => ({
+    resourceId: String(req.params.eventId),
+  })),
+  deleteResponse,
+)
 
 export default router

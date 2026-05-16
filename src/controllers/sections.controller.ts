@@ -2,6 +2,7 @@ import type { Request, Response } from 'express'
 import { prisma } from '../config/prisma.js'
 import type { Prisma } from '../../generated/prisma/index.js'
 import { handleControllerError } from '../utils/controller-error.js'
+import { normalizeFieldsForStorage, withActiveSectionFields } from '../utils/form-fields.js'
 import type {
   SectionParams,
   CreateSectionBody,
@@ -10,7 +11,7 @@ import type {
 } from '../types/sections.js'
 
 async function findEvent(eventId: string) {
-  return prisma.event.findUnique({ where: { id: eventId } })
+  return prisma.event.findFirst({ where: { id: eventId, stsrc: { not: 'D' } } })
 }
 
 export async function listSections(req: Request<Pick<SectionParams, 'eventId'>>, res: Response) {
@@ -28,7 +29,7 @@ export async function listSections(req: Request<Pick<SectionParams, 'eventId'>>,
       orderBy: { order: 'asc' },
     })
 
-    res.json(sections)
+    res.json(sections.map((section) => withActiveSectionFields(section)))
   } catch (error) {
     handleControllerError('Sections', 'list sections failed', error, res)
   }
@@ -64,7 +65,7 @@ export async function createSection(
       },
     })
 
-    res.status(201).json(section)
+    res.status(201).json(withActiveSectionFields(section))
   } catch (error) {
     handleControllerError('Sections', 'create section failed', error, res)
   }
@@ -98,7 +99,9 @@ export async function updateSection(
         ...(title !== undefined && { title }),
         ...(description !== undefined && { description }),
         ...(order !== undefined && { order }),
-        ...(fields !== undefined && { fields: fields as Prisma.InputJsonValue }),
+        ...(fields !== undefined && {
+          fields: normalizeFieldsForStorage(fields, existing.fields) as Prisma.InputJsonValue,
+        }),
         ...(settings !== undefined && { settings: settings as Prisma.InputJsonValue }),
         ...(pageType !== undefined && { pageType }),
         ...(logicX !== undefined && { logicX }),
@@ -106,7 +109,7 @@ export async function updateSection(
       },
     })
 
-    res.json(section)
+    res.json(withActiveSectionFields(section))
   } catch (error) {
     handleControllerError('Sections', 'update section failed', error, res)
   }
@@ -137,7 +140,7 @@ export async function reorderSections(
       orderBy: { order: 'asc' },
     })
 
-    res.json(sections)
+    res.json(sections.map((section) => withActiveSectionFields(section)))
   } catch (error) {
     handleControllerError('Sections', 'reorder sections failed', error, res)
   }

@@ -55,8 +55,8 @@ export async function getEmailComposerDraft(
   try {
     const { eventId } = req.params
 
-    const event = await prisma.event.findUnique({
-      where: { id: eventId },
+    const event = await prisma.event.findFirst({
+      where: { id: eventId, stsrc: { not: 'D' } },
       select: { id: true },
     })
 
@@ -83,8 +83,8 @@ export async function saveEmailComposerDraft(
     const { eventId } = req.params
     const body = req.body
 
-    const event = await prisma.event.findUnique({
-      where: { id: eventId },
+    const event = await prisma.event.findFirst({
+      where: { id: eventId, stsrc: { not: 'D' } },
       select: { id: true },
     })
 
@@ -138,8 +138,8 @@ export async function getSubmitFormSettings(
   try {
     const { eventId } = req.params
 
-    const event = await prisma.event.findUnique({
-      where: { id: eventId },
+    const event = await prisma.event.findFirst({
+      where: { id: eventId, stsrc: { not: 'D' } },
       select: { id: true },
     })
 
@@ -164,8 +164,8 @@ export async function saveSubmitFormSettings(
 ) {
   try {
     const { eventId } = req.params
-    const event = await prisma.event.findUnique({
-      where: { id: eventId },
+    const event = await prisma.event.findFirst({
+      where: { id: eventId, stsrc: { not: 'D' } },
       select: { id: true },
     })
 
@@ -203,8 +203,8 @@ export async function createEmailBlast(
     }
 
     if (eventId) {
-      const event = await prisma.event.findUnique({
-        where: { id: eventId },
+      const event = await prisma.event.findFirst({
+        where: { id: eventId, stsrc: { not: 'D' } },
         select: { id: true },
       })
 

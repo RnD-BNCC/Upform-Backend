@@ -96,7 +96,7 @@ export async function sendSubmitConfirmationEmail(
   if (!recipient) return
 
   const submittedCount = await prisma.response.count({
-    where: { eventId: response.eventId, deletedAt: null },
+    where: { eventId: response.eventId, stsrc: { not: 'D' } },
   })
   const raffleNumber = formatRaffleNumber(settings, submittedCount)
   const submittedAt = response.submittedAt.toISOString()

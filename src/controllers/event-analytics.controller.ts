@@ -46,7 +46,7 @@ export async function listEventAnalytics(req: Request<EventParams>, res: Respons
   try {
     const { eventId } = req.params
 
-    const event = await prisma.event.findUnique({ where: { id: eventId } })
+    const event = await prisma.event.findFirst({ where: { id: eventId, stsrc: { not: 'D' } } })
     if (!event) {
       res.status(404).json({ error: 'Event not found' })
       return
@@ -69,7 +69,7 @@ export async function trackPublicEventAnalytics(
 ) {
   try {
     const event = await prisma.event.findFirst({
-      where: { id: req.params.id, status: 'active' },
+      where: { id: req.params.id, status: 'active', stsrc: { not: 'D' } },
     })
     if (!event) {
       res.status(404).json({ error: 'Event not found or not active' })

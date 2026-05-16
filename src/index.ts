@@ -18,9 +18,9 @@ import pollSlideRoutes from './routes/poll-slides.js'
 import publicPollRoutes from './routes/public-polls.js'
 import questionRoutes from './routes/questions.js'
 import uploadRoutes from './routes/upload/index.js'
-import spreadsheetRoutes from './routes/spreadsheet.js'
 import emailBlastRoutes from './routes/email-blasts.js'
 import galleryRoutes from './routes/gallery.js'
+import permissionRequestRoutes from './routes/permission-requests.js'
 import { requestLogger } from './middlewares/logger.js'
 import { startEmailWorker } from './workers/email.worker.js'
 
@@ -45,7 +45,6 @@ app.use('/api/events/:eventId/sections', sectionRoutes)
 app.use('/api/events/:eventId/responses', responseRoutes)
 app.use('/api/events/:eventId/response-progress', responseProgressRoutes)
 app.use('/api/events/:eventId/analytics', eventAnalyticsRoutes)
-app.use('/api/events/:eventId/spreadsheet', spreadsheetRoutes)
 app.use('/api/public', publicRoutes)
 app.use('/api/polls/:pollId/questions', questionRoutes)
 app.use('/api/polls', pollRoutes)
@@ -54,6 +53,7 @@ app.use('/api/public/polls', publicPollRoutes)
 app.use('/api/upload', uploadRoutes)
 app.use('/api/email-blasts', emailBlastRoutes)
 app.use('/api/gallery', galleryRoutes)
+app.use('/api/permission-requests', permissionRequestRoutes)
 
 app.get('/health', (_req, res) => {
   res.json({
