@@ -1,4 +1,4 @@
-import { Router } from 'express'
+import { Router, type Request } from 'express'
 import {
   createSection,
   deleteSection,
@@ -7,9 +7,15 @@ import {
   updateSection,
 } from '../controllers/sections.controller.js'
 import { requireAuth } from '../middlewares/auth.js'
+import { PERMISSION_ACTIONS, requirePermission } from '../middlewares/permission.js'
 
 const router = Router({ mergeParams: true })
+const eventResource = (req: Request) => ({
+  resourceId: String(req.params.eventId),
+})
+
 router.use(requireAuth)
+router.use(requirePermission(PERMISSION_ACTIONS.editForm, eventResource))
 
 /**
  * @swagger

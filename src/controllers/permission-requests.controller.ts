@@ -5,16 +5,19 @@ import type { AuthUser } from '../middlewares/auth.js'
 import {
   getPermissionApproverEmails,
   isPermissionApprover,
+  USER_ROLES,
 } from '../config/roles.js'
 import {
   SOFT_DELETE_TRANSACTION_OPTIONS,
   softDeleteEventById,
 } from '../services/event-soft-delete.js'
+import { hasApprovedPermission, type PermissionAction } from '../middlewares/permission.js'
 
 const VALID_ACTIONS = new Set([
   'responses.view',
   'responses.edit',
   'responses.delete',
+  'forms.edit',
   'forms.delete',
   'forms.rollback',
 ])
@@ -211,6 +214,62 @@ export async function createPermissionRequest(
     res.status(201).json(request)
   } catch (error) {
     handleControllerError('Permission Requests', 'create failed', error, res)
+  }
+}
+
+export async function getPermissionAccess(
+  req: Request<
+    object,
+    unknown,
+    object,
+    { action?: string; resourceId?: string; resourceType?: string }
+  >,
+  res: Response,
+) {
+  try {
+    const user = getUser(res)
+    const action = req.query.action?.trim()
+    const resourceId = req.query.resourceId?.trim()
+    const resourceType = req.query.resourceType?.trim() || 'event'
+
+    if (!action || !VALID_ACTIONS.has(action) || !resourceId) {
+      res.status(400).json({ error: 'Invalid permission access check' })
+      return
+    }
+
+    if (user.role !== USER_ROLES.activist || isPermissionApprover(user.email)) {
+      res.json({ allowed: true, pending: false, request: null })
+      return
+    }
+
+    const allowed = await hasApprovedPermission({
+      action: action as PermissionAction,
+      requesterEmail: user.email,
+      resourceId,
+      resourceType,
+    })
+
+    const pendingRequest = allowed
+      ? null
+      : await prisma.permissionRequest.findFirst({
+          where: {
+            action,
+            requesterEmail: user.email.toLowerCase(),
+            resourceId,
+            resourceType,
+            status: 'pending',
+          },
+          orderBy: { createdAt: 'desc' },
+          select: { createdAt: true, id: true, status: true },
+        })
+
+    res.json({
+      allowed,
+      pending: !!pendingRequest,
+      request: pendingRequest,
+    })
+  } catch (error) {
+    handleControllerError('Permission Requests', 'access check failed', error, res)
   }
 }
 

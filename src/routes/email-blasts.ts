@@ -10,6 +10,7 @@ import {
   saveSubmitFormSettings,
 } from '../controllers/email-blasts.controller.js'
 import { requireAuth } from '../middlewares/auth.js'
+import { PERMISSION_ACTIONS, requirePermission } from '../middlewares/permission.js'
 
 const router = Router()
 router.use(requireAuth)
@@ -49,9 +50,21 @@ router.use(requireAuth)
  *             schema:
  *               $ref: '#/components/schemas/Error'
  */
-router.get('/events/:eventId/draft', getEmailComposerDraft)
+router.get(
+  '/events/:eventId/draft',
+  requirePermission(PERMISSION_ACTIONS.editForm, (req) => ({
+    resourceId: String(req.params.eventId),
+  })),
+  getEmailComposerDraft,
+)
 
-router.get('/events/:eventId/submit-settings', getSubmitFormSettings)
+router.get(
+  '/events/:eventId/submit-settings',
+  requirePermission(PERMISSION_ACTIONS.editForm, (req) => ({
+    resourceId: String(req.params.eventId),
+  })),
+  getSubmitFormSettings,
+)
 
 /**
  * @swagger
@@ -94,9 +107,21 @@ router.get('/events/:eventId/submit-settings', getSubmitFormSettings)
  *             schema:
  *               $ref: '#/components/schemas/Error'
  */
-router.put('/events/:eventId/draft', saveEmailComposerDraft)
+router.put(
+  '/events/:eventId/draft',
+  requirePermission(PERMISSION_ACTIONS.editForm, (req) => ({
+    resourceId: String(req.params.eventId),
+  })),
+  saveEmailComposerDraft,
+)
 
-router.put('/events/:eventId/submit-settings', saveSubmitFormSettings)
+router.put(
+  '/events/:eventId/submit-settings',
+  requirePermission(PERMISSION_ACTIONS.editForm, (req) => ({
+    resourceId: String(req.params.eventId),
+  })),
+  saveSubmitFormSettings,
+)
 
 /**
  * @swagger

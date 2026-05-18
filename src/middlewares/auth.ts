@@ -2,7 +2,7 @@ import type { Request, Response, NextFunction } from 'express'
 import { auth, isEmailAllowed } from '../config/auth.js'
 import { fromNodeHeaders } from 'better-auth/node'
 import { prisma } from '../config/prisma.js'
-import { getRoleForEmail, type UserRole } from '../config/roles.js'
+import { getRoleForEmail, USER_ROLES, type UserRole } from '../config/roles.js'
 
 export interface AuthUser {
   id: string
@@ -31,7 +31,11 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
     where: { id: session.user.id },
     select: { role: true },
   })
-  const role = (dbUser?.role as UserRole | undefined) ?? getRoleForEmail(session.user.email)
+  const emailRole = getRoleForEmail(session.user.email)
+  const role =
+    emailRole === USER_ROLES.activist
+      ? USER_ROLES.activist
+      : ((dbUser?.role as UserRole | undefined) ?? emailRole)
 
   res.locals.user = { ...session.user, role }
   next()

@@ -29,6 +29,7 @@ export function getPermissionApproverEmails() {
   return (process.env.PERMISSION_APPROVER_EMAILS ?? '')
     .split(',')
     .map((email) => normalizeEmail(email))
+    .filter((email) => email.length > 0 && !isActivistEmail(email))
     .filter(Boolean)
 }
 
@@ -36,7 +37,7 @@ export function isPermissionApprover(email?: string | null) {
   const normalizedEmail = normalizeEmail(email)
   return (
     normalizedEmail.length > 0 &&
+    !isActivistEmail(normalizedEmail) &&
     getPermissionApproverEmails().includes(normalizedEmail)
   )
 }
-

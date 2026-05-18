@@ -155,10 +155,6 @@ export async function getEvent(req: Request<EventParams>, res: Response) {
       where: { id: req.params.id, stsrc: { not: EVENT_STSRC.deleted } },
       include: {
         sections: { orderBy: { order: 'asc' } },
-        responses: {
-          where: { stsrc: { not: EVENT_STSRC.deleted } },
-          orderBy: { submittedAt: 'desc' },
-        },
       },
     })
 

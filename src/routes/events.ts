@@ -125,7 +125,13 @@ router.get('/', listEvents)
  *       404:
  *         description: Not found
  */
-router.post('/:id/duplicate', duplicateEvent)
+router.post(
+  '/:id/duplicate',
+  requirePermission(PERMISSION_ACTIONS.editForm, (req) => ({
+    resourceId: String(req.params.id),
+  })),
+  duplicateEvent,
+)
 
 /**
  * @swagger
@@ -148,7 +154,13 @@ router.post('/:id/duplicate', duplicateEvent)
  *       404:
  *         description: Deleted event not found
  */
-router.post('/:id/restore', restoreEvent)
+router.post(
+  '/:id/restore',
+  requirePermission(PERMISSION_ACTIONS.editForm, (req) => ({
+    resourceId: String(req.params.id),
+  })),
+  restoreEvent,
+)
 
 /**
  * @swagger
@@ -171,7 +183,13 @@ router.post('/:id/restore', restoreEvent)
  *       404:
  *         description: Not found
  */
-router.get('/:id/questions', getEventQuestions)
+router.get(
+  '/:id/questions',
+  requirePermission(PERMISSION_ACTIONS.editForm, (req) => ({
+    resourceId: String(req.params.id),
+  })),
+  getEventQuestions,
+)
 
 /**
  * @swagger
@@ -194,9 +212,21 @@ router.get('/:id/questions', getEventQuestions)
  *       404:
  *         description: Event or section not found
  */
-router.patch('/:id/builder', saveBuilderEvent)
+router.patch(
+  '/:id/builder',
+  requirePermission(PERMISSION_ACTIONS.editForm, (req) => ({
+    resourceId: String(req.params.id),
+  })),
+  saveBuilderEvent,
+)
 
-router.get('/:id/audit-logs', listEventAuditLogs)
+router.get(
+  '/:id/audit-logs',
+  requirePermission(PERMISSION_ACTIONS.editForm, (req) => ({
+    resourceId: String(req.params.id),
+  })),
+  listEventAuditLogs,
+)
 router.post(
   '/:id/audit-logs/:logId/rollback',
   requirePermission(PERMISSION_ACTIONS.rollbackForm, (req) => ({
@@ -234,7 +264,13 @@ router.post(
  *             schema:
  *               $ref: '#/components/schemas/Error'
  */
-router.get('/:id', getEvent)
+router.get(
+  '/:id',
+  requirePermission(PERMISSION_ACTIONS.editForm, (req) => ({
+    resourceId: String(req.params.id),
+  })),
+  getEvent,
+)
 
 /**
  * @swagger
@@ -289,7 +325,13 @@ router.post('/', createEvent)
  *       404:
  *         description: Not found
  */
-router.patch('/:id', updateEvent)
+router.patch(
+  '/:id',
+  requirePermission(PERMISSION_ACTIONS.editForm, (req) => ({
+    resourceId: String(req.params.id),
+  })),
+  updateEvent,
+)
 
 /**
  * @swagger

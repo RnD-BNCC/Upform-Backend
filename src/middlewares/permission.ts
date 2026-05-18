@@ -7,6 +7,7 @@ export const PERMISSION_ACTIONS = {
   viewResponses: 'responses.view',
   editResponse: 'responses.edit',
   deleteResponse: 'responses.delete',
+  editForm: 'forms.edit',
   deleteForm: 'forms.delete',
   rollbackForm: 'forms.rollback',
 } as const
@@ -100,4 +101,3 @@ export function requirePermission(
     })
   }
 }
-

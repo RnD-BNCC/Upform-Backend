@@ -1,6 +1,7 @@
 import { Router } from 'express'
 import { listEventAnalytics } from '../controllers/event-analytics.controller.js'
 import { requireAuth } from '../middlewares/auth.js'
+import { PERMISSION_ACTIONS, requirePermission } from '../middlewares/permission.js'
 
 const router = Router({ mergeParams: true })
 
@@ -41,6 +42,13 @@ const router = Router({ mergeParams: true })
  *             schema:
  *               $ref: '#/components/schemas/Error'
  */
-router.get('/', requireAuth, listEventAnalytics)
+router.get(
+  '/',
+  requireAuth,
+  requirePermission(PERMISSION_ACTIONS.viewResponses, (req) => ({
+    resourceId: String(req.params.eventId),
+  })),
+  listEventAnalytics,
+)
 
 export default router
