@@ -1,4 +1,4 @@
-import { prisma } from '../config/prisma.js'
+import { pollSlideRepository, pollVoteRepository } from '@/modules/poll-slides/poll-slides.repository.js'
 
 const ACTIVE_STSRC_FILTER = { not: 'D' } as const
 
@@ -7,7 +7,7 @@ function activeVotesWhere(slideId: string) {
 }
 
 export async function aggregateWordCloud(slideId: string) {
-  const votes = await prisma.pollVote.findMany({ where: activeVotesWhere(slideId) })
+  const votes = await pollVoteRepository.findMany({ where: activeVotesWhere(slideId) })
   const wordMap = new Map<string, number>()
 
   for (const vote of votes) {
@@ -21,11 +21,11 @@ export async function aggregateWordCloud(slideId: string) {
 }
 
 export async function aggregateMC(slideId: string) {
-  const slide = await prisma.pollSlide.findFirst({
+  const slide = await pollSlideRepository.findFirst({
     where: { id: slideId, stsrc: ACTIVE_STSRC_FILTER },
   })
   const options = (slide?.options as string[]) ?? []
-  const votes = await prisma.pollVote.findMany({ where: activeVotesWhere(slideId) })
+  const votes = await pollVoteRepository.findMany({ where: activeVotesWhere(slideId) })
 
   const countMap = new Map<string, number>()
   for (const opt of options) countMap.set(opt, 0)
@@ -41,7 +41,7 @@ export async function aggregateMC(slideId: string) {
 }
 
 export async function aggregateOpenEnded(slideId: string) {
-  const votes = await prisma.pollVote.findMany({
+  const votes = await pollVoteRepository.findMany({
     where: activeVotesWhere(slideId),
     orderBy: { createdAt: 'desc' },
   })
@@ -64,11 +64,11 @@ export async function aggregateOpenEnded(slideId: string) {
 }
 
 export async function aggregateRanking(slideId: string) {
-  const slide = await prisma.pollSlide.findFirst({
+  const slide = await pollSlideRepository.findFirst({
     where: { id: slideId, stsrc: ACTIVE_STSRC_FILTER },
   })
   const options = (slide?.options as string[]) ?? []
-  const votes = await prisma.pollVote.findMany({ where: activeVotesWhere(slideId) })
+  const votes = await pollVoteRepository.findMany({ where: activeVotesWhere(slideId) })
 
   const rankSums = new Map<string, { total: number; count: number }>()
   for (const opt of options) rankSums.set(opt, { total: 0, count: 0 })
@@ -93,7 +93,7 @@ export async function aggregateRanking(slideId: string) {
 }
 
 export async function aggregateScale(slideId: string) {
-  const votes = await prisma.pollVote.findMany({ where: activeVotesWhere(slideId) })
+  const votes = await pollVoteRepository.findMany({ where: activeVotesWhere(slideId) })
   const statementsMap = new Map<string, Map<number, number>>()
 
   for (const vote of votes) {
@@ -118,7 +118,7 @@ export async function aggregateScale(slideId: string) {
 }
 
 export async function aggregateQA(slideId: string) {
-  const votes = await prisma.pollVote.findMany({
+  const votes = await pollVoteRepository.findMany({
     where: activeVotesWhere(slideId),
     orderBy: { createdAt: 'desc' },
   })
@@ -134,7 +134,7 @@ export async function aggregateQA(slideId: string) {
 }
 
 export async function aggregateGuessNumber(slideId: string) {
-  const votes = await prisma.pollVote.findMany({ where: activeVotesWhere(slideId) })
+  const votes = await pollVoteRepository.findMany({ where: activeVotesWhere(slideId) })
   const countMap = new Map<number, number>()
 
   for (const vote of votes) {
@@ -148,11 +148,11 @@ export async function aggregateGuessNumber(slideId: string) {
 }
 
 export async function aggregateHundredPoints(slideId: string) {
-  const slide = await prisma.pollSlide.findFirst({
+  const slide = await pollSlideRepository.findFirst({
     where: { id: slideId, stsrc: ACTIVE_STSRC_FILTER },
   })
   const options = (slide?.options as string[]) ?? []
-  const votes = await prisma.pollVote.findMany({ where: activeVotesWhere(slideId) })
+  const votes = await pollVoteRepository.findMany({ where: activeVotesWhere(slideId) })
 
   const pointsMap = new Map<string, number>()
   for (const opt of options) pointsMap.set(opt, 0)
@@ -170,7 +170,7 @@ export async function aggregateHundredPoints(slideId: string) {
 }
 
 export async function aggregatePinOnImage(slideId: string) {
-  const votes = await prisma.pollVote.findMany({
+  const votes = await pollVoteRepository.findMany({
     where: activeVotesWhere(slideId),
     orderBy: { createdAt: 'desc' },
   })
@@ -186,11 +186,11 @@ export async function aggregatePinOnImage(slideId: string) {
 }
 
 export async function aggregate2x2Grid(slideId: string) {
-  const slide = await prisma.pollSlide.findFirst({
+  const slide = await pollSlideRepository.findFirst({
     where: { id: slideId, stsrc: ACTIVE_STSRC_FILTER },
   })
   const options = (slide?.options as string[]) ?? []
-  const votes = await prisma.pollVote.findMany({ where: activeVotesWhere(slideId) })
+  const votes = await pollVoteRepository.findMany({ where: activeVotesWhere(slideId) })
 
   const placementMap = new Map<string, { xTotal: number; yTotal: number; count: number }>()
   for (const opt of options) placementMap.set(opt, { xTotal: 0, yTotal: 0, count: 0 })

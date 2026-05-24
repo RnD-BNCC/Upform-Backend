@@ -1,6 +1,6 @@
-import { mailer, SMTP_FROM } from '../config/mailer.js'
-import { prisma } from '../config/prisma.js'
-import { getInlineEmailAttachments, inlineBrandLogo } from './email-inline-assets.js'
+import { responseRepository } from '@/modules/responses/responses.repository.js'
+import { mailer, SMTP_FROM } from '@/config/mailer.js'
+import { getInlineEmailAttachments, inlineBrandLogo } from '@/utils/email-inline-assets.js'
 
 type SubmitFormSetting = {
   body: string
@@ -95,7 +95,7 @@ export async function sendSubmitConfirmationEmail(
   const recipient = getRecipientEmail(response.answers, settings.recipientFieldId)
   if (!recipient) return
 
-  const submittedCount = await prisma.response.count({
+  const submittedCount = await responseRepository.count({
     where: { eventId: response.eventId, stsrc: { not: 'D' } },
   })
   const raffleNumber = formatRaffleNumber(settings, submittedCount)

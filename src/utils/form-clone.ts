@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import type { Prisma } from '../../generated/prisma/index.js'
-import { getActiveFormFields, normalizeFieldsForStorage } from './form-fields.js'
+import { getActiveFormFields, normalizeFieldsForStorage } from '@/utils/form-fields.js'
 
 type SectionCloneSource = {
   description: string
