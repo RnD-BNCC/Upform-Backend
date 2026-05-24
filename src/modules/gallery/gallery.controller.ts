@@ -6,6 +6,7 @@ import { DeleteObjectCommand, GetObjectCommand, ListObjectsV2Command } from '@aw
 import { Readable } from 'stream'
 import { s3, S3_BUCKET } from '@/config/s3.js'
 import { auth, isEmailAllowed } from '@/config/auth.js'
+import { isPermissionApprover, USER_ROLES } from '@/config/roles.js'
 import {
   createDriveAccountAuthUrl,
   createDriveFolder,
@@ -20,6 +21,11 @@ import { extractGalleryFiles, extractRespondentLabel } from '@/modules/gallery/g
 import type { FormField } from '@/modules/gallery/gallery.types.js'
 import type { Prisma } from '../../../generated/prisma/index.js'
 import { getActiveFormFields } from '@/utils/form-fields.js'
+import {
+  hasApprovedPermission,
+  PERMISSION_ACTIONS,
+  type PermissionAction,
+} from '@/middlewares/permission.js'
 
 const S3_BASE_URL = `https://s3.bncc.net/${S3_BUCKET}/`
 
@@ -353,6 +359,51 @@ function buildGalleryEvent(event: GalleryEventSource, req: Request) {
 
 type BuiltGalleryEvent = NonNullable<ReturnType<typeof buildGalleryEvent>>
 
+function canBypassGalleryPermission(user?: AuthUser | null) {
+  return !user || user.role !== USER_ROLES.activist || isPermissionApprover(user.email)
+}
+
+async function hasGalleryPermission(
+  user: AuthUser,
+  eventId: string,
+  action: PermissionAction = PERMISSION_ACTIONS.viewGallery,
+) {
+  if (canBypassGalleryPermission(user)) return true
+  return hasApprovedPermission({
+    action,
+    requesterEmail: user.email,
+    resourceId: eventId,
+    resourceType: 'gallery',
+  })
+}
+
+async function findGalleryEventIdByFileUrl(url: string, req: Request) {
+  const events = await eventRepository.findMany({
+    where: { stsrc: { not: 'D' } },
+    include: {
+      sections: { orderBy: { order: 'asc' } },
+      responses: {
+        where: { stsrc: { not: 'D' } },
+        orderBy: { submittedAt: 'desc' },
+      },
+      galleryShare: {
+        include: galleryShareInclude,
+      },
+    },
+    orderBy: { createdAt: 'desc' },
+  })
+
+  for (const event of events) {
+    const galleryEvent = buildGalleryEvent(event, req)
+    const hasFile = galleryEvent?.responses.some((response) =>
+      response ? response.files.some((file) => file.url === url) : false,
+    )
+    if (hasFile) return event.id
+  }
+
+  return null
+}
+
 async function getOptionalUser(req: Request) {
   const session = await auth.api.getSession({
     headers: fromNodeHeaders(req.headers),
@@ -537,6 +588,7 @@ async function syncDriveForEvent(
 
 export async function listGalleryFiles(req: Request, res: Response) {
   try {
+    const user = res.locals.user as AuthUser
     const page = Math.max(1, parseInt(req.query.page as string) || 1)
     const take = Math.min(50, Math.max(1, parseInt(req.query.take as string) || 20))
     const skip = (page - 1) * take
@@ -556,7 +608,17 @@ export async function listGalleryFiles(req: Request, res: Response) {
       orderBy: { createdAt: 'desc' },
     })
 
-    const result = events
+    const visibleEvents = canBypassGalleryPermission(user)
+      ? events
+      : (
+          await Promise.all(
+            events.map(async (event) =>
+              (await hasGalleryPermission(user, event.id)) ? event : null,
+            ),
+          )
+        ).filter((event): event is (typeof events)[number] => !!event)
+
+    const result = visibleEvents
       .map((event) => {
         return buildGalleryEvent(event, req)
       })
@@ -998,10 +1060,36 @@ export async function previewGalleryFile(req: Request, res: Response) {
 
 export async function deleteGalleryFile(req: Request, res: Response) {
   try {
+    const user = res.locals.user as AuthUser
     const { url } = req.body as { url?: string }
     if (!url || !url.startsWith(S3_BASE_URL)) {
       res.status(400).json({ error: 'Invalid URL' })
       return
+    }
+
+    if (!canBypassGalleryPermission(user)) {
+      const eventId = await findGalleryEventIdByFileUrl(url, req)
+      if (!eventId) {
+        res.status(404).json({ error: 'Gallery file not found' })
+        return
+      }
+
+      const allowed = await hasGalleryPermission(
+        user,
+        eventId,
+        PERMISSION_ACTIONS.deleteGalleryFile,
+      )
+      if (!allowed) {
+        res.status(403).json({
+          code: 'PERMISSION_REQUIRED',
+          error: 'Permission approval required',
+          action: PERMISSION_ACTIONS.deleteGalleryFile,
+          resourceId: eventId,
+          resourceType: 'gallery',
+          request: null,
+        })
+        return
+      }
     }
 
     const key = url.slice(S3_BASE_URL.length)

@@ -13,6 +13,9 @@ export const PERMISSION_ACTIONS = {
   editPoll: 'polls.edit',
   deletePoll: 'polls.delete',
   rollbackPoll: 'polls.rollback',
+  viewGallery: 'gallery.view',
+  manageGallery: 'gallery.manage',
+  deleteGalleryFile: 'gallery.delete',
 } as const
 
 export type PermissionAction =

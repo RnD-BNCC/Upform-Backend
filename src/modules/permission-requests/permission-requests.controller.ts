@@ -24,6 +24,9 @@ const VALID_ACTIONS = new Set([
   'polls.edit',
   'polls.delete',
   'polls.rollback',
+  'gallery.view',
+  'gallery.manage',
+  'gallery.delete',
 ])
 
 function getUser(res: Response) {
@@ -60,7 +63,7 @@ async function enrichPermissionRequests<
     new Set(
       requests
         .filter((request) =>
-          ['event', 'form'].includes(request.resourceType.toLowerCase()),
+          ['event', 'form', 'gallery'].includes(request.resourceType.toLowerCase()),
         )
         .map((request) => request.resourceId),
     ),
@@ -104,11 +107,11 @@ async function enrichPermissionRequests<
   return requests.map((request) => {
     const resourceType = request.resourceType.toLowerCase()
 
-    if (resourceType === 'event' || resourceType === 'form') {
+    if (resourceType === 'event' || resourceType === 'form' || resourceType === 'gallery') {
       const event = eventById.get(request.resourceId)
       return {
         ...request,
-        resourceKind: 'Form',
+        resourceKind: resourceType === 'gallery' ? 'Gallery' : 'Form',
         resourceName: event?.name?.trim() || 'Untitled form',
         resourceStatus: event
           ? event.stsrc === 'D'

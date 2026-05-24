@@ -12,6 +12,7 @@ import {
   updateGalleryShare,
 } from '@/modules/gallery/gallery.controller.js'
 import { requireAuth } from '@/middlewares/auth.js'
+import { PERMISSION_ACTIONS, requirePermission } from '@/middlewares/permission.js'
 
 const router = Router()
 router.get('/share/:token', getSharedGalleryFiles)
@@ -105,10 +106,38 @@ router.use(requireAuth)
  *               $ref: '#/components/schemas/Error'
  */
 router.get('/files', listGalleryFiles)
-router.get('/events/:eventId/share', getGalleryShare)
-router.patch('/events/:eventId/share', updateGalleryShare)
-router.get('/events/:eventId/share/drive/auth', startGalleryDriveAuth)
-router.post('/events/:eventId/share/drive', connectGalleryDrive)
+router.get(
+  '/events/:eventId/share',
+  requirePermission(PERMISSION_ACTIONS.manageGallery, (req) => ({
+    resourceId: String(req.params.eventId),
+    resourceType: 'gallery',
+  })),
+  getGalleryShare,
+)
+router.patch(
+  '/events/:eventId/share',
+  requirePermission(PERMISSION_ACTIONS.manageGallery, (req) => ({
+    resourceId: String(req.params.eventId),
+    resourceType: 'gallery',
+  })),
+  updateGalleryShare,
+)
+router.get(
+  '/events/:eventId/share/drive/auth',
+  requirePermission(PERMISSION_ACTIONS.manageGallery, (req) => ({
+    resourceId: String(req.params.eventId),
+    resourceType: 'gallery',
+  })),
+  startGalleryDriveAuth,
+)
+router.post(
+  '/events/:eventId/share/drive',
+  requirePermission(PERMISSION_ACTIONS.manageGallery, (req) => ({
+    resourceId: String(req.params.eventId),
+    resourceType: 'gallery',
+  })),
+  connectGalleryDrive,
+)
 
 /**
  * @swagger
