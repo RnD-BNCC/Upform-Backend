@@ -1,7 +1,7 @@
 import 'dotenv/config'
 import { hashPassword } from 'better-auth/crypto'
-import { prisma } from '../config/prisma.js'
-import { ACTIVIST_EMAILS, USER_ROLES } from '../config/roles.js'
+import { prisma } from '@/config/prisma.js'
+import { ACTIVIST_EMAILS, USER_ROLES } from '@/config/roles.js'
 
 const DEFAULT_PASSWORD = process.env.ACTIVIST_DEFAULT_PASSWORD?.trim()
 const MIN_PASSWORD_LENGTH = 12

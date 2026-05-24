@@ -1,8 +1,8 @@
+import { userRepository } from '@/modules/auth/auth.repository.js'
 import type { Request, Response, NextFunction } from 'express'
-import { auth, isEmailAllowed } from '../config/auth.js'
+import { auth, isEmailAllowed } from '@/config/auth.js'
 import { fromNodeHeaders } from 'better-auth/node'
-import { prisma } from '../config/prisma.js'
-import { getRoleForEmail, USER_ROLES, type UserRole } from '../config/roles.js'
+import { getRoleForEmail, USER_ROLES, type UserRole } from '@/config/roles.js'
 
 export interface AuthUser {
   id: string
@@ -27,7 +27,7 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
     return
   }
 
-  const dbUser = await prisma.user.findUnique({
+  const dbUser = await userRepository.findUnique({
     where: { id: session.user.id },
     select: { role: true },
   })

@@ -1,13 +1,13 @@
 import { betterAuth } from 'better-auth'
 import { bearer } from 'better-auth/plugins'
 import { prismaAdapter } from 'better-auth/adapters/prisma'
-import { prisma } from './prisma.js'
+import { prisma } from '@/config/prisma.js'
 import {
   getPermissionApproverEmails,
   getRoleForEmail,
   isActivistEmail,
   normalizeEmail,
-} from './roles.js'
+} from '@/config/roles.js'
 
 export const getAllowedEmails = () =>
   (process.env.ALLOWED_EMAILS ?? '')

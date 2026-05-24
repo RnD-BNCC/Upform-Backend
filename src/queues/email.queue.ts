@@ -1,5 +1,5 @@
 import { Queue } from 'bullmq'
-import { redis } from '../config/redis.js'
+import { redis } from '@/config/redis.js'
 
 export type EmailJobData = {
   blastId: string
