@@ -1,7 +1,7 @@
+import { permissionRequestRepository } from '@/modules/permission-requests/permission-requests.repository.js'
 import type { NextFunction, Request, Response } from 'express'
-import { prisma } from '../config/prisma.js'
-import type { AuthUser } from './auth.js'
-import { isPermissionApprover, USER_ROLES } from '../config/roles.js'
+import type { AuthUser } from '@/middlewares/auth.js'
+import { isPermissionApprover, USER_ROLES } from '@/config/roles.js'
 
 export const PERMISSION_ACTIONS = {
   viewResponses: 'responses.view',
@@ -10,6 +10,9 @@ export const PERMISSION_ACTIONS = {
   editForm: 'forms.edit',
   deleteForm: 'forms.delete',
   rollbackForm: 'forms.rollback',
+  editPoll: 'polls.edit',
+  deletePoll: 'polls.delete',
+  rollbackPoll: 'polls.rollback',
 } as const
 
 export type PermissionAction =
@@ -35,7 +38,7 @@ export async function hasApprovedPermission({
   resourceType: string
 }) {
   const now = getExpiryThreshold()
-  const request = await prisma.permissionRequest.findFirst({
+  const request = await permissionRequestRepository.findFirst({
     where: {
       action,
       requesterEmail: requesterEmail.toLowerCase(),
@@ -79,7 +82,7 @@ export function requirePermission(
       return
     }
 
-    const existingRequest = await prisma.permissionRequest.findFirst({
+    const existingRequest = await permissionRequestRepository.findFirst({
       where: {
         action,
         requesterEmail: user.email.toLowerCase(),

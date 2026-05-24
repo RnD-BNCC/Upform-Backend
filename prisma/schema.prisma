@@ -274,6 +274,7 @@ model Poll {
   createdBy    String?
   updatedBy    String?
   deletedBy    String?
+  auditLogs    PollAuditLog[]
   slides       PollSlide[]
   questions    Question[]
   createdAt    DateTime    @default(now())
@@ -282,6 +283,24 @@ model Poll {
 
   @@index([stsrc])
   @@index([deletedAt])
+}
+
+model PollAuditLog {
+  id             String   @id @default(uuid())
+  pollId         String
+  action         String
+  targetType     String
+  targetId       String?
+  actorEmail     String?
+  beforeSnapshot Json?
+  afterSnapshot  Json?
+  createdAt      DateTime @default(now())
+
+  poll           Poll     @relation(fields: [pollId], references: [id], onDelete: Cascade)
+
+  @@index([pollId, createdAt])
+  @@index([actorEmail])
+  @@index([action])
 }
 
 model Question {

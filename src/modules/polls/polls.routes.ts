@@ -4,12 +4,16 @@ import {
   deletePoll,
   deletePollVotes,
   getPoll,
+  listPollAuditLogEntries,
   listPollScores,
   listPolls,
   restorePoll,
+  rollbackPollAuditLog,
   updatePoll,
-} from '../controllers/polls.controller.js'
-import { requireAuth } from '../middlewares/auth.js'
+} from '@/modules/polls/polls.controller.js'
+import { requireAuth } from '@/middlewares/auth.js'
+import { PERMISSION_ACTIONS, requirePermission } from '@/middlewares/permission.js'
+import { getRouteParam } from '@/utils/route-param.js'
 
 const router = Router()
 router.use(requireAuth)
@@ -38,6 +42,17 @@ router.use(requireAuth)
  *         description: Paginated polls
  */
 router.get('/', listPolls)
+
+router.get('/:id/audit-logs', listPollAuditLogEntries)
+
+router.post(
+  '/:id/audit-logs/:logId/rollback',
+  requirePermission(PERMISSION_ACTIONS.rollbackPoll, (req) => ({
+    resourceId: getRouteParam(req.params.id),
+    resourceType: 'poll',
+  })),
+  rollbackPollAuditLog,
+)
 
 /**
  * @swagger
@@ -118,7 +133,14 @@ router.post('/', createPoll)
  *       404:
  *         description: Not found
  */
-router.patch('/:id', updatePoll)
+router.patch(
+  '/:id',
+  requirePermission(PERMISSION_ACTIONS.editPoll, (req) => ({
+    resourceId: getRouteParam(req.params.id),
+    resourceType: 'poll',
+  })),
+  updatePoll,
+)
 
 /**
  * @swagger
@@ -141,7 +163,14 @@ router.patch('/:id', updatePoll)
  *       404:
  *         description: Not found
  */
-router.delete('/:id', deletePoll)
+router.delete(
+  '/:id',
+  requirePermission(PERMISSION_ACTIONS.deletePoll, (req) => ({
+    resourceId: getRouteParam(req.params.id),
+    resourceType: 'poll',
+  })),
+  deletePoll,
+)
 
 /**
  * @swagger
@@ -164,7 +193,14 @@ router.delete('/:id', deletePoll)
  *       404:
  *         description: Not found
  */
-router.post('/:id/restore', restorePoll)
+router.post(
+  '/:id/restore',
+  requirePermission(PERMISSION_ACTIONS.deletePoll, (req) => ({
+    resourceId: getRouteParam(req.params.id),
+    resourceType: 'poll',
+  })),
+  restorePoll,
+)
 
 /**
  * @swagger
@@ -227,6 +263,13 @@ router.get('/:id/scores', listPollScores)
  *             schema:
  *               $ref: '#/components/schemas/Error'
  */
-router.delete('/:id/votes', deletePollVotes)
+router.delete(
+  '/:id/votes',
+  requirePermission(PERMISSION_ACTIONS.editPoll, (req) => ({
+    resourceId: getRouteParam(req.params.id),
+    resourceType: 'poll',
+  })),
+  deletePollVotes,
+)
 
 export default router

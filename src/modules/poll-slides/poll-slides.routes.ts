@@ -4,11 +4,21 @@ import {
   deletePollSlide,
   reorderPollSlides,
   updatePollSlide,
-} from '../controllers/poll-slides.controller.js'
-import { requireAuth } from '../middlewares/auth.js'
+} from '@/modules/poll-slides/poll-slides.controller.js'
+import { requireAuth } from '@/middlewares/auth.js'
+import { PERMISSION_ACTIONS, requirePermission } from '@/middlewares/permission.js'
+import { getRouteParam } from '@/utils/route-param.js'
 
 const router = Router({ mergeParams: true })
 router.use(requireAuth)
+
+const requirePollEditPermission = requirePermission(
+  PERMISSION_ACTIONS.editPoll,
+  (req) => ({
+    resourceId: getRouteParam(req.params.pollId),
+    resourceType: 'poll',
+  }),
+)
 
 /**
  * @swagger
@@ -48,7 +58,7 @@ router.use(requireAuth)
  *       404:
  *         description: Poll not found
  */
-router.post('/', createPollSlide)
+router.post('/', requirePollEditPermission, createPollSlide)
 
 /**
  * @swagger
@@ -95,7 +105,7 @@ router.post('/', createPollSlide)
  *       404:
  *         description: Not found
  */
-router.patch('/:slideId', updatePollSlide)
+router.patch('/:slideId', requirePollEditPermission, updatePollSlide)
 
 /**
  * @swagger
@@ -124,7 +134,7 @@ router.patch('/:slideId', updatePollSlide)
  *       404:
  *         description: Not found
  */
-router.delete('/:slideId', deletePollSlide)
+router.delete('/:slideId', requirePollEditPermission, deletePollSlide)
 
 /**
  * @swagger
@@ -158,6 +168,6 @@ router.delete('/:slideId', deletePollSlide)
  *       200:
  *         description: Reordered slides
  */
-router.put('/reorder', reorderPollSlides)
+router.put('/reorder', requirePollEditPermission, reorderPollSlides)
 
 export default router
