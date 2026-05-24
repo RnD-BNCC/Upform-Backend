@@ -221,10 +221,14 @@ export async function listPermissionGrants(
         : undefined
     const page = normalizeInteger(req.query.page, 1, 1, 10_000)
     const take = normalizeInteger(req.query.take, 10, 1, 50)
+    const resourceTypeFilter =
+      resourceType === 'event' || resourceType === 'form'
+        ? { in: ['event', 'form'] }
+        : resourceType
     const where = {
       ...(requesterEmail ? { requesterEmail: { contains: requesterEmail, mode: 'insensitive' as const } } : {}),
-      ...(resourceId ? { resourceId } : {}),
-      ...(resourceType ? { resourceType } : {}),
+      ...(resourceId ? { resourceId: { contains: resourceId, mode: 'insensitive' as const } } : {}),
+      ...(resourceType ? { resourceType: resourceTypeFilter } : {}),
       ...(status ? { status } : { status: { in: ['approved', 'rejected'] } }),
     }
 
