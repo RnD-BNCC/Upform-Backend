@@ -65,6 +65,20 @@ type QuestionLikePayload = {
   userId: string
 }
 
+type QAHighlightPayload = {
+  pollId: string
+  question?: {
+    createdAt: string
+    isAnswered?: boolean
+    likeCount?: number
+    participantName: string
+    text: string
+    voteId?: string
+  } | null
+  slideId?: string
+  voteId: string | null
+}
+
 const POLL_ROOM_PREFIX = 'poll:'
 const POLL_STSRC_DELETED = 'D'
 const QUESTION_MAX_LENGTH = 200
@@ -429,9 +443,9 @@ function registerBroadcastHandlers(socket: PollSocket) {
     if (currentSlide !== undefined) socket.to(room).emit('slide-change', { currentSlide })
   })
 
-  socket.on('qa-highlight', ({ pollId, voteId }: { pollId: string; voteId: string | null }) => {
+  socket.on('qa-highlight', ({ pollId, question, slideId, voteId }: QAHighlightPayload) => {
     if (!pollId) return
-    emitToPoll(pollId, 'qa-highlight', { voteId })
+    emitToPoll(pollId, 'qa-highlight', { question: question ?? null, slideId, voteId })
   })
 }
 
@@ -465,6 +479,7 @@ function registerLeaderboardHandlers(socket: PollSocket) {
     }
 
     broadcastParticipantList(pollId)
+    emitToPoll(pollId, 'reset-scores', { pollId })
     emitToPoll(pollId, 'scores-update', { pollId, scores: getPollScores(pollId) })
   })
 }

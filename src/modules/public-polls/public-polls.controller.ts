@@ -241,6 +241,12 @@ export async function togglePollVoteAnswer(req: Request<PollVoteParams>, res: Re
     const results = await aggregateResults('qa', slideId)
     const io = getIO()
     io.to(`poll:${pollId}`).emit('vote-update', { slideId, results })
+    io.to(`poll:${pollId}`).emit('qa-answer-updated', {
+      isAnswered: updated.isAnswered,
+      results,
+      slideId,
+      voteId,
+    })
 
     res.json({ ok: true, isAnswered: updated.isAnswered })
   } catch (error) {
