@@ -1,5 +1,8 @@
 import { Router } from 'express'
-import { listEventAnalytics } from '@/modules/event-analytics/event-analytics.controller.js'
+import {
+  downloadEventAnalyticsReport,
+  listEventAnalytics,
+} from '@/modules/event-analytics/event-analytics.controller.js'
 import { requireAuth } from '@/middlewares/auth.js'
 import { PERMISSION_ACTIONS, requirePermission } from '@/middlewares/permission.js'
 
@@ -49,6 +52,15 @@ router.get(
     resourceId: String(req.params.eventId),
   })),
   listEventAnalytics,
+)
+
+router.post(
+  '/report.pdf',
+  requireAuth,
+  requirePermission(PERMISSION_ACTIONS.viewResponses, (req) => ({
+    resourceId: String(req.params.eventId),
+  })),
+  downloadEventAnalyticsReport,
 )
 
 export default router
