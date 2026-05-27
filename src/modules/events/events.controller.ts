@@ -34,6 +34,13 @@ const EVENT_STSRC = {
   deleted: 'D',
 } as const
 
+const RESOURCE_VISIBILITIES = new Set(['private', 'public'])
+
+function normalizeResourceVisibility(value?: string | null) {
+  const normalized = value?.trim().toLowerCase()
+  return normalized && RESOURCE_VISIBILITIES.has(normalized) ? normalized : 'private'
+}
+
 function getUniqueValues(values: Array<string | null | undefined> = []) {
   return [
     ...new Set(
@@ -95,6 +102,7 @@ export async function listEvents(req: Request, res: Response) {
             color: true,
             theme: true,
             image: true,
+            visibility: true,
             stsrc: true,
             createdBy: true,
             updatedBy: true,
@@ -167,7 +175,7 @@ export async function getEvent(req: Request<EventParams>, res: Response) {
 
 export async function createEvent(req: Request<object, unknown, CreateEventBody>, res: Response) {
   try {
-    const { name, color, theme } = req.body
+    const { name, color, theme, visibility } = req.body
     const userEmail = getAuthEmail(res)
 
     const event = await eventRepository.create({
@@ -175,6 +183,7 @@ export async function createEvent(req: Request<object, unknown, CreateEventBody>
         name: name ?? '',
         color: color ?? '#0054a5',
         theme: theme ?? 'light',
+        visibility: normalizeResourceVisibility(visibility),
         stsrc: EVENT_STSRC.available,
         createdBy: userEmail,
         updatedBy: userEmail,
@@ -202,7 +211,7 @@ export async function updateEvent(
   res: Response,
 ) {
   try {
-    const { name, status, color, image, theme } = req.body
+    const { name, status, color, image, theme, visibility } = req.body
     const userEmail = getAuthEmail(res)
 
     const existing = await eventRepository.findFirst({
@@ -224,6 +233,9 @@ export async function updateEvent(
           ...(color !== undefined && { color }),
           ...(image !== undefined && { image }),
           ...(theme !== undefined && { theme }),
+          ...(visibility !== undefined && {
+            visibility: normalizeResourceVisibility(visibility),
+          }),
           stsrc: EVENT_STSRC.updated,
           updatedBy: userEmail,
         },
@@ -269,6 +281,7 @@ export async function duplicateEvent(req: Request<EventParams>, res: Response) {
         image: source.image,
         name: `${source.name.trim() || 'Untitled Form'} (Copy)`,
         theme: source.theme,
+        visibility: source.visibility,
         stsrc: EVENT_STSRC.available,
         createdBy: userEmail,
         updatedBy: userEmail,
@@ -377,6 +390,9 @@ export async function saveBuilderEvent(
             ...(eventPayload?.color !== undefined && { color: eventPayload.color }),
             ...(eventPayload?.image !== undefined && { image: eventPayload.image }),
             ...(eventPayload?.theme !== undefined && { theme: eventPayload.theme }),
+            ...(eventPayload?.visibility !== undefined && {
+              visibility: normalizeResourceVisibility(eventPayload.visibility),
+            }),
             stsrc: EVENT_STSRC.updated,
             updatedBy: userEmail,
           },

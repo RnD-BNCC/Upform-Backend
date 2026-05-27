@@ -6,6 +6,7 @@ export type CreateEventBody = {
   name?: string
   color?: string
   theme?: string
+  visibility?: string
 }
 
 export type UpdateEventBody = {
@@ -14,6 +15,7 @@ export type UpdateEventBody = {
   color?: string
   image?: string | null
   theme?: string
+  visibility?: string
 }
 
 export type SaveBuilderSectionBody = {
@@ -35,6 +37,7 @@ export type SaveBuilderEventBody = {
     color?: string
     image?: string | null
     theme?: string
+    visibility?: string
   }
   sections?: SaveBuilderSectionBody[]
 }

@@ -11,7 +11,7 @@ import {
   SOFT_DELETE_TRANSACTION_OPTIONS,
   softDeleteEventById,
 } from '@/modules/events/event-soft-delete.service.js'
-import { hasApprovedPermission, type PermissionAction } from '@/middlewares/permission.js'
+import { hasResourcePermission, type PermissionAction } from '@/middlewares/permission.js'
 import { normalizeInteger } from '@/utils/normalize.js'
 
 const VALID_ACTIONS = new Set([
@@ -491,7 +491,7 @@ export async function getPermissionAccess(
       return
     }
 
-    const allowed = await hasApprovedPermission({
+    const allowed = await hasResourcePermission({
       action: action as PermissionAction,
       requesterEmail: user.email,
       resourceId,

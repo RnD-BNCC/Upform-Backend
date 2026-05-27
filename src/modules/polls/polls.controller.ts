@@ -18,6 +18,13 @@ const POLL_STSRC = {
   deleted: 'D',
 } as const
 
+const RESOURCE_VISIBILITIES = new Set(['private', 'public'])
+
+function normalizeResourceVisibility(value?: string | null) {
+  const normalized = value?.trim().toLowerCase()
+  return normalized && RESOURCE_VISIBILITIES.has(normalized) ? normalized : 'private'
+}
+
 function generateCode(): string {
   return String(Math.floor(10000000 + Math.random() * 90000000))
 }
@@ -96,7 +103,7 @@ export async function createPoll(
   res: Response,
 ) {
   try {
-    const { title } = req.body
+    const { title, visibility } = req.body
     const userEmail = getAuthEmail(res)
 
     let code = generateCode()
@@ -109,6 +116,7 @@ export async function createPoll(
         data: {
           title: title ?? '',
           code,
+          visibility: normalizeResourceVisibility(visibility),
           stsrc: POLL_STSRC.available,
           createdBy: userEmail,
           updatedBy: userEmail,
@@ -150,7 +158,7 @@ export async function updatePoll(
   res: Response,
 ) {
   try {
-    const { title, status, currentSlide, settings } = req.body
+    const { title, status, currentSlide, settings, visibility } = req.body
     const userEmail = getAuthEmail(res)
 
     const existing = await pollRepository.findFirst({
@@ -170,6 +178,9 @@ export async function updatePoll(
           ...(status !== undefined && { status }),
           ...(currentSlide !== undefined && { currentSlide }),
           ...(settings !== undefined && { settings: settings as Prisma.InputJsonValue }),
+          ...(visibility !== undefined && {
+            visibility: normalizeResourceVisibility(visibility),
+          }),
           stsrc: POLL_STSRC.updated,
           updatedBy: userEmail,
         },

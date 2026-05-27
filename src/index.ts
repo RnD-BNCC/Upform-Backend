@@ -20,6 +20,7 @@ import questionRoutes from '@/modules/questions/questions.routes.js'
 import uploadRoutes from '@/modules/upload/upload.routes.js'
 import emailBlastRoutes from '@/modules/email-blasts/email-blasts.routes.js'
 import galleryRoutes from '@/modules/gallery/gallery.routes.js'
+import resultsShareRoutes from '@/modules/results-share/results-share.routes.js'
 import permissionRequestRoutes from '@/modules/permission-requests/permission-requests.routes.js'
 import userRoutes from '@/modules/users/users.routes.js'
 import { requestLogger } from '@/middlewares/logger.js'
@@ -54,6 +55,7 @@ app.use('/api/public/polls', publicPollRoutes)
 app.use('/api/upload', uploadRoutes)
 app.use('/api/email-blasts', emailBlastRoutes)
 app.use('/api/gallery', galleryRoutes)
+app.use('/api/results', resultsShareRoutes)
 app.use('/api/permission-requests', permissionRequestRoutes)
 app.use('/api/users', userRoutes)
 

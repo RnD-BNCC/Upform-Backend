@@ -43,7 +43,14 @@ router.use(requireAuth)
  */
 router.get('/', listPolls)
 
-router.get('/:id/audit-logs', listPollAuditLogEntries)
+router.get(
+  '/:id/audit-logs',
+  requirePermission(PERMISSION_ACTIONS.editPoll, (req) => ({
+    resourceId: getRouteParam(req.params.id),
+    resourceType: 'poll',
+  })),
+  listPollAuditLogEntries,
+)
 
 router.post(
   '/:id/audit-logs/:logId/rollback',
@@ -75,7 +82,14 @@ router.post(
  *       404:
  *         description: Not found
  */
-router.get('/:id', getPoll)
+router.get(
+  '/:id',
+  requirePermission(PERMISSION_ACTIONS.editPoll, (req) => ({
+    resourceId: getRouteParam(req.params.id),
+    resourceType: 'poll',
+  })),
+  getPoll,
+)
 
 /**
  * @swagger
@@ -236,7 +250,14 @@ router.post(
  *             schema:
  *               $ref: '#/components/schemas/Error'
  */
-router.get('/:id/scores', listPollScores)
+router.get(
+  '/:id/scores',
+  requirePermission(PERMISSION_ACTIONS.editPoll, (req) => ({
+    resourceId: getRouteParam(req.params.id),
+    resourceType: 'poll',
+  })),
+  listPollScores,
+)
 
 /**
  * @swagger

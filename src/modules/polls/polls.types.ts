@@ -4,6 +4,7 @@ export type PollParams = {
 
 export type CreatePollBody = {
   title?: string
+  visibility?: string
 }
 
 export type UpdatePollBody = {
@@ -11,4 +12,5 @@ export type UpdatePollBody = {
   status?: string
   currentSlide?: number
   settings?: Record<string, unknown>
+  visibility?: string
 }

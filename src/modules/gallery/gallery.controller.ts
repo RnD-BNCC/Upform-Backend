@@ -22,7 +22,7 @@ import type { FormField } from '@/modules/gallery/gallery.types.js'
 import type { Prisma } from '../../../generated/prisma/index.js'
 import { getActiveFormFields } from '@/utils/form-fields.js'
 import {
-  hasApprovedPermission,
+  hasResourcePermission,
   PERMISSION_ACTIONS,
   type PermissionAction,
 } from '@/middlewares/permission.js'
@@ -369,7 +369,7 @@ async function hasGalleryPermission(
   action: PermissionAction = PERMISSION_ACTIONS.viewGallery,
 ) {
   if (canBypassGalleryPermission(user)) return true
-  return hasApprovedPermission({
+  return hasResourcePermission({
     action,
     requesterEmail: user.email,
     resourceId: eventId,

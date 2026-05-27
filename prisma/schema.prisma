@@ -69,6 +69,7 @@ model Event {
   color           String     @default("#0054a5")
   theme           String     @default("light")
   image           String?
+  visibility      String     @default("private")
   stsrc           String     @default("A")
   createdBy       String?
   updatedBy       String?
@@ -81,12 +82,14 @@ model Event {
   emailBlasts     EmailBlast[]
   submitFormSetting SubmitFormSetting?
   galleryShare     GalleryShare?
+  resultShare      EventResultShare?
   auditLogs       FormAuditLog[]
   createdAt       DateTime   @default(now())
   updatedAt       DateTime   @updatedAt
   deletedAt       DateTime?
 
   @@index([stsrc])
+  @@index([visibility])
   @@index([deletedAt])
 }
 
@@ -129,6 +132,34 @@ model FormAuditLog {
   @@index([eventId, createdAt])
   @@index([actorEmail])
   @@index([action])
+}
+
+model EventResultShare {
+  id         String   @id @default(uuid())
+  eventId    String   @unique
+  event      Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  visibility String   @default("private")
+  publicRole String   @default("viewer")
+  token      String   @unique
+  members    EventResultShareMember[]
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([token])
+  @@index([eventId])
+}
+
+model EventResultShareMember {
+  id        String           @id @default(uuid())
+  shareId   String
+  share     EventResultShare @relation(fields: [shareId], references: [id], onDelete: Cascade)
+  email     String
+  role      String           @default("viewer")
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+
+  @@unique([shareId, email])
+  @@index([email])
 }
 
 model GalleryShare {
@@ -270,6 +301,7 @@ model Poll {
   status       String      @default("waiting")
   currentSlide Int         @default(0)
   settings     Json        @default("{}")
+  visibility   String      @default("private")
   stsrc        String      @default("A")
   createdBy    String?
   updatedBy    String?
@@ -282,6 +314,7 @@ model Poll {
   deletedAt    DateTime?
 
   @@index([stsrc])
+  @@index([visibility])
   @@index([deletedAt])
 }
 
