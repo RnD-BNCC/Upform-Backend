@@ -2,11 +2,11 @@ import { eventRepository, permissionRequestRepository, pollRepository, unitOfWor
 import type { Request, Response } from 'express'
 import { handleControllerError } from '@/utils/controller-error.js'
 import type { AuthUser } from '@/middlewares/auth.js'
+import { USER_ROLES } from '@/config/roles.js'
 import {
   getPermissionApproverEmails,
   isPermissionApprover,
-  USER_ROLES,
-} from '@/config/roles.js'
+} from '@/modules/users/users.service.js'
 import {
   SOFT_DELETE_TRANSACTION_OPTIONS,
   softDeleteEventById,
@@ -33,8 +33,8 @@ function getUser(res: Response) {
   return res.locals.user as AuthUser
 }
 
-function assertPermissionApprover(user: AuthUser, res: Response) {
-  if (isPermissionApprover(user.email)) return true
+async function assertPermissionApprover(user: AuthUser, res: Response) {
+  if (await isPermissionApprover(user.email, user.role)) return true
 
   res.status(403).json({ error: 'Only permission approvers can manage access' })
   return false
@@ -151,7 +151,7 @@ export async function listPermissionRequests(req: Request, res: Response) {
       typeof req.query.status === 'string' && req.query.status.trim()
         ? req.query.status.trim()
         : undefined
-    const isApprover = isPermissionApprover(user.email)
+    const isApprover = await isPermissionApprover(user.email, user.role)
 
     if (!isApprover) {
       res.status(403).json({
@@ -178,7 +178,7 @@ export async function listPermissionRequests(req: Request, res: Response) {
 
     res.json({
       approver: isApprover,
-      approverEmails: isApprover ? getPermissionApproverEmails() : [],
+      approverEmails: isApprover ? await getPermissionApproverEmails() : [],
       data,
     })
   } catch (error) {
@@ -204,7 +204,7 @@ export async function listPermissionGrants(
 ) {
   try {
     const user = getUser(res)
-    if (!assertPermissionApprover(user, res)) return
+    if (!(await assertPermissionApprover(user, res))) return
 
     const resourceId =
       typeof req.query.resourceId === 'string' && req.query.resourceId.trim()
@@ -259,7 +259,7 @@ export async function listPermissionGrants(
 
     res.json({
       approver: true,
-      approverEmails: getPermissionApproverEmails(),
+      approverEmails: await getPermissionApproverEmails(),
       data,
       meta: {
         page,
@@ -289,7 +289,7 @@ export async function createPermissionGrant(
 ) {
   try {
     const user = getUser(res)
-    if (!assertPermissionApprover(user, res)) return
+    if (!(await assertPermissionApprover(user, res))) return
 
     const action = req.body.action?.trim()
     const requesterEmail = normalizeRequesterEmail(req.body.requesterEmail)
@@ -349,7 +349,7 @@ export async function createPermissionGrant(
 export async function revokePermissionGrant(req: Request<{ id: string }>, res: Response) {
   try {
     const user = getUser(res)
-    if (!assertPermissionApprover(user, res)) return
+    if (!(await assertPermissionApprover(user, res))) return
 
     const existing = await permissionRequestRepository.findUnique({
       where: { id: req.params.id },
@@ -382,7 +382,7 @@ export async function revokePermissionGrant(req: Request<{ id: string }>, res: R
 export async function reactivatePermissionGrant(req: Request<{ id: string }>, res: Response) {
   try {
     const user = getUser(res)
-    if (!assertPermissionApprover(user, res)) return
+    if (!(await assertPermissionApprover(user, res))) return
 
     const existing = await permissionRequestRepository.findUnique({
       where: { id: req.params.id },
@@ -486,7 +486,7 @@ export async function getPermissionAccess(
       return
     }
 
-    if (user.role !== USER_ROLES.activist || isPermissionApprover(user.email)) {
+    if (user.role !== USER_ROLES.activist || (await isPermissionApprover(user.email, user.role))) {
       res.json({ allowed: true, pending: false, request: null })
       return
     }
@@ -528,7 +528,7 @@ export async function approvePermissionRequest(
 ) {
   try {
     const user = getUser(res)
-    if (!isPermissionApprover(user.email)) {
+    if (!(await isPermissionApprover(user.email, user.role))) {
       res.status(403).json({ error: 'Only permission approvers can approve requests' })
       return
     }
@@ -599,7 +599,7 @@ export async function rejectPermissionRequest(
 ) {
   try {
     const user = getUser(res)
-    if (!isPermissionApprover(user.email)) {
+    if (!(await isPermissionApprover(user.email, user.role))) {
       res.status(403).json({ error: 'Only permission approvers can reject requests' })
       return
     }

@@ -9,6 +9,7 @@ export const ACTIVIST_EMAILS = [
 export const USER_ROLES = {
   admin: 'admin',
   activist: 'activist',
+  permissionApprover: 'permission_approver',
 } as const
 
 export type UserRole = (typeof USER_ROLES)[keyof typeof USER_ROLES]
@@ -25,19 +26,6 @@ export function getRoleForEmail(email?: string | null): UserRole {
   return isActivistEmail(email) ? USER_ROLES.activist : USER_ROLES.admin
 }
 
-export function getPermissionApproverEmails() {
-  return (process.env.PERMISSION_APPROVER_EMAILS ?? '')
-    .split(',')
-    .map((email) => normalizeEmail(email))
-    .filter((email) => email.length > 0 && !isActivistEmail(email))
-    .filter(Boolean)
-}
-
-export function isPermissionApprover(email?: string | null) {
-  const normalizedEmail = normalizeEmail(email)
-  return (
-    normalizedEmail.length > 0 &&
-    !isActivistEmail(normalizedEmail) &&
-    getPermissionApproverEmails().includes(normalizedEmail)
-  )
+export function isPermissionApproverRole(role?: string | null) {
+  return role === USER_ROLES.permissionApprover
 }

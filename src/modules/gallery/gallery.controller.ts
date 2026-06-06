@@ -6,7 +6,8 @@ import { DeleteObjectCommand, GetObjectCommand, ListObjectsV2Command } from '@aw
 import { Readable } from 'stream'
 import { s3, S3_BUCKET } from '@/config/s3.js'
 import { auth, isEmailAllowed } from '@/config/auth.js'
-import { isPermissionApprover, USER_ROLES } from '@/config/roles.js'
+import { USER_ROLES } from '@/config/roles.js'
+import { isPermissionApprover } from '@/modules/users/users.service.js'
 import {
   createDriveAccountAuthUrl,
   createDriveFolder,
@@ -359,8 +360,8 @@ function buildGalleryEvent(event: GalleryEventSource, req: Request) {
 
 type BuiltGalleryEvent = NonNullable<ReturnType<typeof buildGalleryEvent>>
 
-function canBypassGalleryPermission(user?: AuthUser | null) {
-  return !user || user.role !== USER_ROLES.activist || isPermissionApprover(user.email)
+async function canBypassGalleryPermission(user?: AuthUser | null) {
+  return !user || user.role !== USER_ROLES.activist || await isPermissionApprover(user.email, user.role)
 }
 
 async function hasGalleryPermission(
@@ -368,7 +369,7 @@ async function hasGalleryPermission(
   eventId: string,
   action: PermissionAction = PERMISSION_ACTIONS.viewGallery,
 ) {
-  if (canBypassGalleryPermission(user)) return true
+  if (await canBypassGalleryPermission(user)) return true
   return hasResourcePermission({
     action,
     requesterEmail: user.email,
@@ -411,8 +412,8 @@ async function getOptionalUser(req: Request) {
   return session?.user as AuthUser | undefined
 }
 
-function getShareRole(share: GalleryShareRecord, userEmail?: string) {
-  if (isEmailAllowed(userEmail)) return 'editor'
+async function getShareRole(share: GalleryShareRecord, userEmail?: string) {
+  if (await isEmailAllowed(userEmail)) return 'editor'
   if (share.visibility === 'public') return normalizeRole(share.publicRole)
   if (!userEmail) return null
 
@@ -608,7 +609,8 @@ export async function listGalleryFiles(req: Request, res: Response) {
       orderBy: { createdAt: 'desc' },
     })
 
-    const visibleEvents = canBypassGalleryPermission(user)
+    const canBypass = await canBypassGalleryPermission(user)
+    const visibleEvents = canBypass
       ? events
       : (
           await Promise.all(
@@ -827,7 +829,7 @@ export async function completeGalleryDriveAuth(req: Request, res: Response) {
       where: { id: state.userId },
       select: { email: true },
     })
-    if (!user || !isEmailAllowed(user.email)) {
+    if (!user || !(await isEmailAllowed(user.email))) {
       redirectWithStatus('unauthorized')
       return
     }
@@ -947,7 +949,7 @@ export async function getSharedGalleryFiles(req: Request, res: Response) {
     }
 
     const user = await getOptionalUser(req)
-    const role = getShareRole(share, user?.email)
+    const role = await getShareRole(share, user?.email)
     if (!role) {
       res.status(user ? 403 : 401).json({ error: 'You do not have access to this gallery' })
       return
@@ -1067,7 +1069,7 @@ export async function deleteGalleryFile(req: Request, res: Response) {
       return
     }
 
-    if (!canBypassGalleryPermission(user)) {
+    if (!(await canBypassGalleryPermission(user))) {
       const eventId = await findGalleryEventIdByFileUrl(url, req)
       if (!eventId) {
         res.status(404).json({ error: 'Gallery file not found' })

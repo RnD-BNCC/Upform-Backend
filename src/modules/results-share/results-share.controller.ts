@@ -87,7 +87,7 @@ async function getOptionalUser(req: Request) {
   return session?.user as AuthUser | undefined
 }
 
-function getShareRole(
+async function getShareRole(
   share: {
     members: Array<{ email: string; role: string }>
     publicRole: string
@@ -95,7 +95,7 @@ function getShareRole(
   },
   userEmail?: string,
 ) {
-  if (isEmailAllowed(userEmail)) return 'editor'
+  if (await isEmailAllowed(userEmail)) return 'editor'
   if (share.visibility === 'public') return normalizeRole(share.publicRole)
   if (share.visibility === 'private') return null
   if (!userEmail) return null
@@ -200,7 +200,7 @@ export async function getSharedResults(req: Request<ShareParams>, res: Response)
     }
 
     const user = await getOptionalUser(req)
-    const role = getShareRole(share, user?.email)
+    const role = await getShareRole(share, user?.email)
     if (!role) {
       res.status(user ? 403 : 401).json({ error: 'You do not have access to these results' })
       return

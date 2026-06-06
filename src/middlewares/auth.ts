@@ -22,7 +22,7 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
     return
   }
 
-  if (!isEmailAllowed(session.user.email)) {
+  if (!(await isEmailAllowed(session.user.email))) {
     res.status(403).json({ error: 'Unauthorized email' })
     return
   }

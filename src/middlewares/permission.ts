@@ -3,7 +3,8 @@ import type { NextFunction, Request, Response } from 'express'
 import type { AuthUser } from '@/middlewares/auth.js'
 import { prisma } from '@/config/prisma.js'
 import { isEmailAllowed } from '@/config/auth.js'
-import { isPermissionApprover, USER_ROLES } from '@/config/roles.js'
+import { USER_ROLES } from '@/config/roles.js'
+import { isPermissionApprover } from '@/modules/users/users.service.js'
 
 export const PERMISSION_ACTIONS = {
   viewResponses: 'responses.view',
@@ -62,7 +63,7 @@ async function getResultShareRole(eventId: string, requesterEmail: string) {
   })
 
   if (!share) return null
-  if (isEmailAllowed(requesterEmail)) return 'editor'
+  if (await isEmailAllowed(requesterEmail)) return 'editor'
   if (share.visibility === 'private') return null
   if (share.visibility === 'public') return normalizeShareRole(share.publicRole)
 
@@ -218,7 +219,7 @@ export function requirePermission(
       return
     }
 
-    if (user.role !== USER_ROLES.activist || isPermissionApprover(user.email)) {
+    if (user.role !== USER_ROLES.activist || (await isPermissionApprover(user.email, user.role))) {
       next()
       return
     }
