@@ -1,14 +1,14 @@
+import { emailBlastRepository, emailLogRepository } from '@/modules/email-blasts/email-blasts.repository.js'
 import { Worker, type Job } from 'bullmq'
-import { redis } from '../config/redis.js'
-import { mailer, SMTP_FROM } from '../config/mailer.js'
-import { prisma } from '../config/prisma.js'
-import type { EmailJobData } from '../queues/email.queue.js'
-import { getInlineEmailAttachments, inlineBrandLogo } from '../utils/email-inline-assets.js'
+import { redis } from '@/config/redis.js'
+import { mailer, SMTP_FROM } from '@/config/mailer.js'
+import type { EmailJobData } from '@/queues/email.queue.js'
+import { getInlineEmailAttachments, inlineBrandLogo } from '@/utils/email-inline-assets.js'
 
 async function processEmail(job: Job<EmailJobData>) {
   const { blastId, recipient, subject, html } = job.data
 
-  await prisma.emailBlast.update({
+  await emailBlastRepository.update({
     where: { id: blastId },
     data: { status: 'processing' },
   })
@@ -23,13 +23,13 @@ async function processEmail(job: Job<EmailJobData>) {
     to: recipient,
   })
 
-  await prisma.emailLog.upsert({
+  await emailLogRepository.upsert({
     where: { blastId_recipient: { blastId, recipient } },
     create: { blastId, recipient, status: 'sent', attempt: job.attemptsMade + 1, sentAt: new Date() },
     update: { status: 'sent', attempt: job.attemptsMade + 1, sentAt: new Date(), error: null },
   })
 
-  await prisma.emailBlast.update({
+  await emailBlastRepository.update({
     where: { id: blastId },
     data: { sentCount: { increment: 1 } },
   })
@@ -40,14 +40,14 @@ async function onFailed(job: Job<EmailJobData> | undefined, err: Error) {
   const { blastId, recipient } = job.data
   const isFinal = job.attemptsMade >= (job.opts.attempts ?? 5)
 
-  await prisma.emailLog.upsert({
+  await emailLogRepository.upsert({
     where: { blastId_recipient: { blastId, recipient } },
     create: { blastId, recipient, status: 'failed', attempt: job.attemptsMade, error: err.message },
     update: { status: 'failed', attempt: job.attemptsMade, error: err.message },
   })
 
   if (isFinal) {
-    await prisma.emailBlast.update({
+    await emailBlastRepository.update({
       where: { id: blastId },
       data: { failedCount: { increment: 1 } },
     })
@@ -60,7 +60,7 @@ async function onCompleted(job: Job<EmailJobData>) {
 }
 
 async function syncBlastStatus(blastId: string) {
-  const blast = await prisma.emailBlast.findUnique({ where: { id: blastId } })
+  const blast = await emailBlastRepository.findUnique({ where: { id: blastId } })
   if (!blast) return
 
   const processed = blast.sentCount + blast.failedCount
@@ -70,7 +70,7 @@ async function syncBlastStatus(blastId: string) {
   if (blast.sentCount === 0) status = 'failed'
   else if (blast.failedCount > 0) status = 'partial_failed'
 
-  await prisma.emailBlast.update({ where: { id: blastId }, data: { status } })
+  await emailBlastRepository.update({ where: { id: blastId }, data: { status } })
 }
 
 export function startEmailWorker() {

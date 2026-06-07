@@ -31,11 +31,13 @@ const options: swaggerJSDoc.Options = {
             color: { type: 'string', example: '#0054a5' },
             theme: { type: 'string', example: 'light' },
             image: { type: 'string', nullable: true },
-            spreadsheetId: { type: 'string', nullable: true },
-            spreadsheetUrl: { type: 'string', nullable: true },
+            stsrc: { type: 'string', enum: ['A', 'U', 'D'], example: 'A' },
+            createdBy: { type: 'string', nullable: true },
+            updatedBy: { type: 'string', nullable: true },
             sections: { type: 'array', items: { $ref: '#/components/schemas/Section' } },
             createdAt: { type: 'string', format: 'date-time' },
             updatedAt: { type: 'string', format: 'date-time' },
+            deletedAt: { type: 'string', format: 'date-time', nullable: true },
           },
         },
         CreateEvent: {
@@ -425,7 +427,7 @@ const options: swaggerJSDoc.Options = {
     },
     security: [{ BearerAuth: [] }],
   },
-  apis: ['./src/routes/**/*.ts'],
+  apis: ['./src/modules/**/*.routes.ts'],
 }
 
 export const swaggerSpec = swaggerJSDoc(options)
