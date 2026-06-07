@@ -18,12 +18,26 @@ export function normalizeEmail(email?: string | null) {
   return email?.trim().toLowerCase() ?? ''
 }
 
+export function getAllowedEmails() {
+  return (process.env.ALLOWED_EMAILS ?? '')
+    .split(',')
+    .map((email) => normalizeEmail(email))
+    .filter(Boolean)
+}
+
 export function isActivistEmail(email?: string | null) {
   return ACTIVIST_EMAILS.includes(normalizeEmail(email) as (typeof ACTIVIST_EMAILS)[number])
 }
 
+export function isAllowedEmail(email?: string | null) {
+  const normalizedEmail = normalizeEmail(email)
+  return !!normalizedEmail && getAllowedEmails().includes(normalizedEmail)
+}
+
 export function getRoleForEmail(email?: string | null): UserRole {
-  return isActivistEmail(email) ? USER_ROLES.activist : USER_ROLES.admin
+  if (isActivistEmail(email)) return USER_ROLES.activist
+  if (isAllowedEmail(email)) return USER_ROLES.permissionApprover
+  return USER_ROLES.admin
 }
 
 export function isPermissionApproverRole(role?: string | null) {

@@ -1,4 +1,10 @@
-import { USER_ROLES, isActivistEmail, isPermissionApproverRole, normalizeEmail } from '@/config/roles.js'
+import {
+  USER_ROLES,
+  getAllowedEmails,
+  isActivistEmail,
+  isPermissionApproverRole,
+  normalizeEmail,
+} from '@/config/roles.js'
 import { usersRepository } from '@/modules/users/users.repository.js'
 
 export async function getPermissionApproverEmails() {
@@ -25,4 +31,20 @@ export async function isPermissionApprover(email?: string | null, role?: string 
   })
 
   return !!user
+}
+
+export async function syncAllowedEmailApproverRoles() {
+  const allowedEmails = getAllowedEmails().filter((email) => !isActivistEmail(email))
+  if (allowedEmails.length === 0) return { count: 0 }
+
+  return usersRepository.updateMany({
+    where: {
+      email: { in: allowedEmails, mode: 'insensitive' },
+      role: { not: USER_ROLES.activist },
+    },
+    data: {
+      role: USER_ROLES.permissionApprover,
+      updatedAt: new Date(),
+    },
+  })
 }
