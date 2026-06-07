@@ -24,6 +24,7 @@ import resultsShareRoutes from '@/modules/results-share/results-share.routes.js'
 import permissionRequestRoutes from '@/modules/permission-requests/permission-requests.routes.js'
 import userRoutes from '@/modules/users/users.routes.js'
 import { requestLogger } from '@/middlewares/logger.js'
+import { syncAllowedEmailApproverRoles } from '@/modules/users/users.service.js'
 import { startEmailWorker } from '@/workers/email.worker.js'
 
 const app = express()
@@ -68,7 +69,19 @@ app.get('/health', (_req, res) => {
   })
 })
 
-server.listen(PORT, () => {
-  console.log(`Server running on http://localhost:${PORT}`)
-  console.log(`Swagger docs at http://localhost:${PORT}/api-docs`)
+async function bootstrap() {
+  const syncResult = await syncAllowedEmailApproverRoles()
+  if (syncResult.count > 0) {
+    console.info(`[Auth] Synced ${syncResult.count} allowed email approver role(s)`)
+  }
+
+  server.listen(PORT, () => {
+    console.log(`Server running on http://localhost:${PORT}`)
+    console.log(`Swagger docs at http://localhost:${PORT}/api-docs`)
+  })
+}
+
+bootstrap().catch((error) => {
+  console.error('[Bootstrap] Failed to start server:', error)
+  process.exitCode = 1
 })
