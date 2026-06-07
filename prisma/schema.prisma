@@ -13,10 +13,14 @@ model User {
   email         String    @unique
   emailVerified Boolean
   image         String?
+  role          String    @default("admin")
   createdAt     DateTime
   updatedAt     DateTime
   sessions      Session[]
   accounts      Account[]
+  permissionRequests PermissionRequest[]
+
+  @@index([role])
 }
 
 model Session {
@@ -65,9 +69,11 @@ model Event {
   color           String     @default("#0054a5")
   theme           String     @default("light")
   image           String?
-  spreadsheetId    String?
-  spreadsheetUrl   String?
-  spreadsheetToken String?
+  visibility      String     @default("private")
+  stsrc           String     @default("A")
+  createdBy       String?
+  updatedBy       String?
+  deletedBy       String?
   sections         Section[]
   responses       Response[]
   responseProgresses ResponseProgress[]
@@ -76,8 +82,84 @@ model Event {
   emailBlasts     EmailBlast[]
   submitFormSetting SubmitFormSetting?
   galleryShare     GalleryShare?
+  resultShare      EventResultShare?
+  auditLogs       FormAuditLog[]
   createdAt       DateTime   @default(now())
   updatedAt       DateTime   @updatedAt
+  deletedAt       DateTime?
+
+  @@index([stsrc])
+  @@index([visibility])
+  @@index([deletedAt])
+}
+
+model PermissionRequest {
+  id             String    @id @default(uuid())
+  requesterId    String?
+  requester      User?     @relation(fields: [requesterId], references: [id], onDelete: SetNull)
+  requesterEmail String
+  action         String
+  resourceType   String
+  resourceId     String
+  reason         String?
+  status         String    @default("pending")
+  approvedBy     String?
+  approvedAt     DateTime?
+  rejectedBy     String?
+  rejectedAt     DateTime?
+  expiresAt      DateTime?
+  usedAt         DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([requesterEmail, status])
+  @@index([action, resourceType, resourceId, status])
+  @@index([createdAt])
+}
+
+model FormAuditLog {
+  id             String   @id @default(uuid())
+  eventId        String
+  event          Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  action         String
+  targetType     String
+  targetId       String?
+  actorEmail     String?
+  beforeSnapshot Json?
+  afterSnapshot  Json?
+  createdAt      DateTime @default(now())
+
+  @@index([eventId, createdAt])
+  @@index([actorEmail])
+  @@index([action])
+}
+
+model EventResultShare {
+  id         String   @id @default(uuid())
+  eventId    String   @unique
+  event      Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  visibility String   @default("private")
+  publicRole String   @default("viewer")
+  token      String   @unique
+  members    EventResultShareMember[]
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([token])
+  @@index([eventId])
+}
+
+model EventResultShareMember {
+  id        String           @id @default(uuid())
+  shareId   String
+  share     EventResultShare @relation(fields: [shareId], references: [id], onDelete: Cascade)
+  email     String
+  role      String           @default("viewer")
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+
+  @@unique([shareId, email])
+  @@index([email])
 }
 
 model GalleryShare {
@@ -162,7 +244,10 @@ model Response {
   eventId             String
   event               Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
   submittedAt         DateTime @default(now())
+  stsrc               String   @default("A")
   deletedAt           DateTime?
+
+  @@index([eventId, stsrc])
 }
 
 model ResponseProgress {
@@ -180,9 +265,11 @@ model ResponseProgress {
   progressPercent     Float?
   eventId             String
   event               Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  stsrc               String   @default("A")
   deletedAt           DateTime?
 
   @@index([eventId])
+  @@index([eventId, stsrc])
   @@index([eventId, respondentUuid])
 }
 
@@ -214,10 +301,39 @@ model Poll {
   status       String      @default("waiting")
   currentSlide Int         @default(0)
   settings     Json        @default("{}")
+  visibility   String      @default("private")
+  stsrc        String      @default("A")
+  createdBy    String?
+  updatedBy    String?
+  deletedBy    String?
+  auditLogs    PollAuditLog[]
   slides       PollSlide[]
   questions    Question[]
   createdAt    DateTime    @default(now())
   updatedAt    DateTime    @updatedAt
+  deletedAt    DateTime?
+
+  @@index([stsrc])
+  @@index([visibility])
+  @@index([deletedAt])
+}
+
+model PollAuditLog {
+  id             String   @id @default(uuid())
+  pollId         String
+  action         String
+  targetType     String
+  targetId       String?
+  actorEmail     String?
+  beforeSnapshot Json?
+  afterSnapshot  Json?
+  createdAt      DateTime @default(now())
+
+  poll           Poll     @relation(fields: [pollId], references: [id], onDelete: Cascade)
+
+  @@index([pollId, createdAt])
+  @@index([actorEmail])
+  @@index([action])
 }
 
 model Question {
@@ -227,21 +343,28 @@ model Question {
   authorName  String
   authorId    String?
   likeCount   Int            @default(0)
+  stsrc       String         @default("A")
   createdAt   DateTime       @default(now())
+  deletedAt   DateTime?
 
   likes       QuestionLike[]
   poll        Poll           @relation(fields: [pollId], references: [id], onDelete: Cascade)
+
+  @@index([pollId, stsrc])
 }
 
 model QuestionLike {
   id         String   @id @default(uuid())
   questionId String
   userId     String
+  stsrc      String   @default("A")
   createdAt  DateTime @default(now())
+  deletedAt  DateTime?
 
   question   Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
 
   @@unique([questionId, userId])
+  @@index([questionId, stsrc])
 }
 
 model PollSlide {
@@ -254,9 +377,13 @@ model PollSlide {
   options   Json       @default("[]")
   settings  Json       @default("{}")
   locked    Boolean    @default(false)
+  stsrc     String     @default("A")
   votes     PollVote[]
   createdAt DateTime   @default(now())
   updatedAt DateTime   @updatedAt
+  deletedAt DateTime?
+
+  @@index([pollId, stsrc])
 }
 
 model PollVote {
@@ -266,9 +393,12 @@ model PollVote {
   participantId String
   value         Json
   isAnswered    Boolean   @default(false)
+  stsrc         String    @default("A")
   createdAt     DateTime  @default(now())
+  deletedAt     DateTime?
 
   @@unique([slideId, participantId])
+  @@index([slideId, stsrc])
 }
 
 model EmailBlast {
