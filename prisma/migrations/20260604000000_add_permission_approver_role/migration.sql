@@ -1,3 +1,6 @@
+ALTER TABLE "User"
+ADD COLUMN IF NOT EXISTS "role" TEXT NOT NULL DEFAULT 'admin';
+
 UPDATE "User"
 SET "role" = 'admin', "updatedAt" = CURRENT_TIMESTAMP
 WHERE "role" NOT IN ('admin', 'activist', 'permission_approver');

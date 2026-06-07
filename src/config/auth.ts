@@ -3,18 +3,13 @@ import { bearer } from 'better-auth/plugins'
 import { prismaAdapter } from 'better-auth/adapters/prisma'
 import { prisma } from '@/config/prisma.js'
 import {
+  getAllowedEmails,
   getRoleForEmail,
   isActivistEmail,
   USER_ROLES,
   normalizeEmail,
 } from '@/config/roles.js'
 import { isPermissionApprover } from '@/modules/users/users.service.js'
-
-export const getAllowedEmails = () =>
-  (process.env.ALLOWED_EMAILS ?? '')
-    .split(',')
-    .map((email) => email.trim().toLowerCase())
-    .filter(Boolean)
 
 export async function isEmailAllowed(email?: string | null) {
   const allowed = getAllowedEmails()
