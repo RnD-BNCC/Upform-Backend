@@ -4,6 +4,8 @@ import type { Prisma } from '../../../generated/prisma/index.js'
 import { handleControllerError } from '@/utils/controller-error.js'
 import PDFDocument from 'pdfkit'
 
+type PdfDocument = InstanceType<typeof PDFDocument>
+
 type AnalyticsEventType = 'view' | 'start' | 'section_view' | 'finish'
 
 type AnalyticsEventBody = {
@@ -99,7 +101,7 @@ function formatReportDate(value = new Date()) {
   }).format(value)
 }
 
-function ensureSpace(doc: PDFKit.PDFDocument, neededHeight: number) {
+function ensureSpace(doc: PdfDocument, neededHeight: number) {
   if (doc.y + neededHeight <= doc.page.height - doc.page.margins.bottom) return
   doc.addPage()
 }
@@ -107,7 +109,7 @@ function ensureSpace(doc: PDFKit.PDFDocument, neededHeight: number) {
 const REPORT_COLORS = ['#0f5ea8', '#f2bf3d', '#10b981', '#ef476f']
 
 function drawMetricCards(
-  doc: PDFKit.PDFDocument,
+  doc: PdfDocument,
   metrics: Array<{ label: string; value: string }>,
 ) {
   const startX = doc.page.margins.left
@@ -139,7 +141,7 @@ function drawMetricCards(
   doc.y = y + 98
 }
 
-function drawSectionTitle(doc: PDFKit.PDFDocument, title: string, subtitle?: string) {
+function drawSectionTitle(doc: PdfDocument, title: string, subtitle?: string) {
   ensureSpace(doc, 44)
   const x = doc.page.margins.left
   doc.x = x
@@ -156,7 +158,7 @@ function drawSectionTitle(doc: PDFKit.PDFDocument, title: string, subtitle?: str
 }
 
 function drawReportHeader(
-  doc: PDFKit.PDFDocument,
+  doc: PdfDocument,
   formTitle: string,
   dateRangeLabel: string,
   conditionCount?: number,
@@ -207,7 +209,7 @@ function drawReportHeader(
 }
 
 function drawLineChart(
-  doc: PDFKit.PDFDocument,
+  doc: PdfDocument,
   title: string,
   rows: Array<{ day: string; submissions: number }>,
 ) {
@@ -284,7 +286,7 @@ function drawLineChart(
 }
 
 function drawBarSection(
-  doc: PDFKit.PDFDocument,
+  doc: PdfDocument,
   title: string,
   rows: Array<Record<string, string | number>>,
   config: {
@@ -336,7 +338,7 @@ function drawBarSection(
 }
 
 function drawBarPanel(
-  doc: PDFKit.PDFDocument,
+  doc: PdfDocument,
   x: number,
   y: number,
   width: number,
@@ -392,7 +394,7 @@ function drawBarPanel(
 }
 
 function drawBarTable(
-  doc: PDFKit.PDFDocument,
+  doc: PdfDocument,
   title: string,
   rows: Array<Record<string, string | number>>,
   columns: Array<{ key: string; label: string; width: number }>,
